@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Act. — iOS Concept</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<style>
+  html, body { margin: 0; padding: 0; background: #f0eee9; height: 100%; overflow: hidden; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; }
+  #root { height: 100%; }
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+<script type="text/babel" src="ios-frame.jsx"></script>
+<script type="text/babel" src="design-canvas.jsx"></script>
+<script type="text/babel" src="tweaks-panel.jsx"></script>
+
+<script type="text/babel" src="components/shared.jsx"></script>
+<script type="text/babel" src="components/variation-a-command.jsx"></script>
+<script type="text/babel" src="components/variation-b-stack.jsx"></script>
+<script type="text/babel" src="components/variation-c-mission.jsx"></script>
+
+<script type="text/babel">
+const PHONE_W = 390;
+const PHONE_H = 844;
+
+// Phone wrapper — renders a full-screen iOS device frame around any of the
+// variation screens. Uses IOSDevice's outer chrome (dynamic island, status bar,
+// home indicator) but injects custom dark content.
+function Phone({ children, time = '7:24' }) {
+  return (
+    <div style={{
+      width: PHONE_W, height: PHONE_H, borderRadius: 48, overflow: 'hidden',
+      position: 'relative', background: '#000',
+      boxShadow: '0 40px 80px rgba(0,0,0,0.18), 0 0 0 1px rgba(0,0,0,0.12)',
+      WebkitFontSmoothing: 'antialiased',
+    }}>
+      {/* dynamic island */}
+      <div style={{
+        position: 'absolute', top: 11, left: '50%', transform: 'translateX(-50%)',
+        width: 126, height: 37, borderRadius: 24, background: '#000', zIndex: 50,
+      }} />
+      {/* status bar */}
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, zIndex: 20 }}>
+        <IOSStatusBar dark={true} time={time} />
+      </div>
+      <div style={{ position: 'absolute', top: 0, left: 0, right: 0, bottom: 0 }}>
+        {children}
+      </div>
+      {/* home indicator */}
+      <div style={{
+        position: 'absolute', bottom: 0, left: 0, right: 0, zIndex: 60,
+        height: 34, display: 'flex', justifyContent: 'center', alignItems: 'flex-end',
+        paddingBottom: 8, pointerEvents: 'none',
+      }}>
+        <div style={{
+          width: 139, height: 5, borderRadius: 100,
+          background: 'rgba(255,255,255,0.7)',
+        }} />
+      </div>
+    </div>
+  );
+}
+
+const TWEAK_DEFAULTS = /*EDITMODE-BEGIN*/{
+  "accent": "bone",
+  "density": "comfortable",
+  "tagline": "Act."
+}/*EDITMODE-END*/;
+
+function App() {
+  const [tweaks, setTweak] = useTweaks(TWEAK_DEFAULTS);
+
+  // Override accent color via CSS variable on body
+  React.useEffect(() => {
+    const map = {
+      lime: 'oklch(0.88 0.18 130)',
+      lava: 'oklch(0.72 0.22 30)',
+      ice: 'oklch(0.85 0.14 220)',
+      bone: '#FFFFFF',
+    };
+    // Patch the ACT object accent + limeDim live
+    const c = map[tweaks.accent] || map.lime;
+    window.ACT.lime = c;
+    // Build dim variant
+    if (tweaks.accent === 'bone') {
+      window.ACT.limeDim = 'rgba(255,255,255,0.18)';
+      window.ACT.limeText = '#000';
+    } else {
+      window.ACT.limeDim = c.replace(')', ' / 0.18)').replace('oklch(', 'oklch(');
+      window.ACT.limeText = '#000';
+    }
+    // force re-render of artboards
+    setForce(f => f + 1);
+  }, [tweaks.accent]);
+  const [_, setForce] = React.useState(0);
+
+  return (
+    <>
+      <DesignCanvas>
+        <DCSection id="overview" title="Act." subtitle="iOS app · auto-pilot for meals + workouts · three directions">
+          <DCArtboard id="intro" label="Concept" width={520} height={PHONE_H}>
+            <div style={{
+              width: '100%', height: '100%', background: '#0a0a0a', color: '#fff',
+              padding: 48, boxSizing: 'border-box', fontFamily: '-apple-system, system-ui',
+              display: 'flex', flexDirection: 'column', justifyContent: 'space-between',
+            }}>
+              <div>
+                <div style={{ fontFamily: TYPE.mono, fontSize: 11, letterSpacing: 1.2, color: 'rgba(255,255,255,0.5)' }}>
+                  CONCEPT · DARK MODE iOS
+                </div>
+                <div style={{ fontSize: 96, fontWeight: 800, letterSpacing: -4, lineHeight: 0.92, marginTop: 32 }}>
+                  Act.
+                </div>
+                <div style={{ fontSize: 18, color: 'rgba(255,255,255,0.7)', lineHeight: 1.45, marginTop: 24, maxWidth: 380 }}>
+                  No menus. No choices. The app tells you what to eat and how to train — you do it.
+                </div>
+              </div>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 14, fontSize: 14, color: 'rgba(255,255,255,0.65)', lineHeight: 1.5 }}>
+                <div><span style={{ color: 'oklch(0.88 0.18 130)', fontFamily: TYPE.mono, fontSize: 11, letterSpacing: 0.8 }}>A · COMMAND</span><br/>One thing at a time. Massive type. Imperative voice.</div>
+                <div><span style={{ color: 'oklch(0.88 0.18 130)', fontFamily: TYPE.mono, fontSize: 11, letterSpacing: 0.8 }}>B · STACK</span><br/>Today as a vertical timeline. Past fades, now glows.</div>
+                <div><span style={{ color: 'oklch(0.88 0.18 130)', fontFamily: TYPE.mono, fontSize: 11, letterSpacing: 0.8 }}>C · MISSION</span><br/>Phase ring + queued tasks. Slight game energy.</div>
+              </div>
+            </div>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="variation-a" title="A · Command" subtitle="One imperative thing on screen at a time. The app barks orders.">
+          <DCArtboard id="a-today" label="Today" width={PHONE_W} height={PHONE_H}>
+            <Phone><CmdToday /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-workout" label="Active workout" width={PHONE_W} height={PHONE_H}>
+            <Phone time="12:32"><CmdWorkout /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-cook" label="Active cooking" width={PHONE_W} height={PHONE_H}>
+            <Phone time="13:42"><CmdCook /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-progress" label="Progress" width={PHONE_W} height={PHONE_H}>
+            <Phone><CmdProgress /></Phone>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="variation-b" title="B · Stack" subtitle="Today as a vertical timeline. Done items fade, current glows.">
+          <DCArtboard id="b-today" label="Today timeline" width={PHONE_W} height={PHONE_H}>
+            <Phone><StackToday /></Phone>
+          </DCArtboard>
+          <DCArtboard id="b-workout" label="Workout queue" width={PHONE_W} height={PHONE_H}>
+            <Phone time="12:32"><StackWorkout /></Phone>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="variation-c" title="C" subtitle="Ring.">
+          <DCArtboard id="c-today" label="Mission overview" width={PHONE_W} height={PHONE_H}>
+            <Phone><MissionToday /></Phone>
+          </DCArtboard>
+        </DCSection>
+
+      </DesignCanvas>
+
+      <TweaksPanel title="Tweaks">
+        <TweakSection title="Accent">
+          <TweakRadio label="Color"
+            value={tweaks.accent}
+            onChange={v => setTweak('accent', v)}
+            options={[
+              { value: 'lime', label: 'Lime' },
+              { value: 'lava', label: 'Lava' },
+              { value: 'ice',  label: 'Ice'  },
+              { value: 'bone', label: 'Bone' },
+            ]}/>
+        </TweakSection>
+        <TweakSection title="Brand">
+          <TweakText label="Tagline" value={tweaks.tagline} onChange={v => setTweak('tagline', v)}/>
+        </TweakSection>
+      </TweaksPanel>
+    </>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById('root')).render(<App/>);
+</script>
+</body>
+</html>

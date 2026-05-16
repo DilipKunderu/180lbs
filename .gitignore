@@ -1,0 +1,25 @@
+# macOS
+.DS_Store
+
+# Cursor IDE state (preserve project rules if/when they're added)
+.cursor/*
+!.cursor/rules/
+
+# Editor state
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Claude Design export blob (extracted JSX is the source of truth)
+design/180LB.zip
+
+# Xcode (pre-emptive — the ios/ tree lands later)
+**/*.xcuserdata/
+**/*.xcuserstate
+**/build/
+**/DerivedData/
+**/Pods/
+
+# Node (pre-emptive)
+node_modules/
