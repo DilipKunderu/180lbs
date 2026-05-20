@@ -1,0 +1,34 @@
+default_platform(:ios)
+
+platform :ios do
+  desc "Archive ios/Act.xcodeproj and upload the build to TestFlight via the App Store Connect API. Requires APP_STORE_CONNECT_API_KEY_ID, APP_STORE_CONNECT_API_ISSUER_ID, and APP_STORE_CONNECT_API_KEY_PATH (path to the .p8 file) in the environment."
+  lane :beta do
+    api_key = app_store_connect_api_key(
+      key_id: ENV.fetch("APP_STORE_CONNECT_API_KEY_ID"),
+      issuer_id: ENV.fetch("APP_STORE_CONNECT_API_ISSUER_ID"),
+      key_filepath: ENV.fetch("APP_STORE_CONNECT_API_KEY_PATH"),
+      duration: 1200,
+      in_house: false
+    )
+
+    build_ios_app(
+      project: "ios/Act.xcodeproj",
+      scheme: "Act",
+      configuration: "Release",
+      export_method: "app-store",
+      output_directory: "ios/build",
+      output_name: "Act.ipa",
+      clean: true,
+      include_symbols: true,
+      include_bitcode: false
+    )
+
+    upload_to_testflight(
+      api_key: api_key,
+      ipa: "ios/build/Act.ipa",
+      skip_waiting_for_build_processing: true,
+      skip_submission: true,
+      changelog: ENV["TESTFLIGHT_CHANGELOG"] || "Automated build via GitHub Actions"
+    )
+  end
+end

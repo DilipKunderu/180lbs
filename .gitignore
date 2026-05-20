@@ -1,5 +1,7 @@
 # macOS
 .DS_Store
+.AppleDouble
+.LSOverride
 
 # Cursor IDE state (preserve project rules if/when they're added)
 .cursor/*
@@ -14,12 +16,48 @@
 # Claude Design export blob (extracted JSX is the source of truth)
 design/180LB.zip
 
-# Xcode (pre-emptive — the ios/ tree lands later)
+# Xcode
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xcworkspace/contents.xcworkspacedata
 **/*.xcuserdata/
 **/*.xcuserstate
 **/build/
 **/DerivedData/
 **/Pods/
+Build/
+build/
+DerivedData/
+.build/
+*.ipa
+*.dSYM/
+*.dSYM.zip
+TestResults.xcresult/
+*.xcresult
+
+# Swift Package Manager
+.swiftpm/
+Package.resolved.local
+
+# Apple credentials — NEVER commit
+*.p8
+AuthKey_*.p8
+*.mobileprovision
+*.cer
+*.p12
+*.pem
+
+# Fastlane noise
+fastlane/report.xml
+fastlane/Preview.html
+fastlane/screenshots
+fastlane/test_output
+fastlane/asc_api_key.p8
+
+# Ruby (fastlane deps)
+.bundle/
+vendor/bundle/
 
 # Node (pre-emptive)
 node_modules/

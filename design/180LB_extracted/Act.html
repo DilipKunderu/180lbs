@@ -23,6 +23,9 @@
 
 <script type="text/babel" src="components/shared.jsx"></script>
 <script type="text/babel" src="components/variation-a-command.jsx"></script>
+<script type="text/babel" src="components/variation-a-live.jsx"></script>
+<script type="text/babel" src="components/variation-a-widgets.jsx"></script>
+<script type="text/babel" src="components/variation-a-onboarding.jsx"></script>
 <script type="text/babel" src="components/variation-b-stack.jsx"></script>
 <script type="text/babel" src="components/variation-c-mission.jsx"></script>
 
@@ -132,17 +135,134 @@ function App() {
         </DCSection>
 
         <DCSection id="variation-a" title="A · Command" subtitle="One imperative thing on screen at a time. The app barks orders.">
+          <DCArtboard id="a-weighin" label="Weigh-in" width={PHONE_W} height={PHONE_H}>
+            <Phone time="5:00"><CmdWeighIn /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-weight-pad" label="Weigh-in · manual pad" width={PHONE_W} height={PHONE_H}>
+            <Phone time="5:00"><CmdWeightPad /></Phone>
+          </DCArtboard>
           <DCArtboard id="a-today" label="Today" width={PHONE_W} height={PHONE_H}>
             <Phone><CmdToday /></Phone>
           </DCArtboard>
-          <DCArtboard id="a-workout" label="Active workout" width={PHONE_W} height={PHONE_H}>
+          <DCArtboard id="a-prework" label="Pre-workout" width={PHONE_W} height={PHONE_H}>
+            <Phone time="5:15"><CmdPreWorkout /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-workout" label="Workout · Day A" width={PHONE_W} height={PHONE_H}>
             <Phone time="12:32"><CmdWorkout /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-workout-b" label="Workout · Day B" width={PHONE_W} height={PHONE_H}>
+            <Phone time="12:14"><CmdWorkoutB /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-swim" label="Swim · recovery" width={PHONE_W} height={PHONE_H}>
+            <Phone time="6:45"><CmdSwim /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-swim-solo" label="Swim · solo" width={PHONE_W} height={PHONE_H}>
+            <Phone time="6:45"><CmdSwimSolo /></Phone>
           </DCArtboard>
           <DCArtboard id="a-cook" label="Active cooking" width={PHONE_W} height={PHONE_H}>
             <Phone time="13:42"><CmdCook /></Phone>
           </DCArtboard>
+          <DCArtboard id="a-reheat" label="Reheat" width={PHONE_W} height={PHONE_H}>
+            <Phone time="17:30"><CmdReheat /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-meal" label="Eat" width={PHONE_W} height={PHONE_H}>
+            <Phone time="18:00"><CmdMeal /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-deviate" label="Deviated" width={PHONE_W} height={PHONE_H}>
+            <Phone time="20:14"><CmdDeviate /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-urge" label="Urge · breathe sheet" width={PHONE_W} height={PHONE_H}>
+            <Phone time="14:22"><CmdUrge /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-relapse" label="Relapse log" width={PHONE_W} height={PHONE_H}>
+            <Phone time="22:08"><CmdRelapse /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-recovery" label="Recovery" width={PHONE_W} height={PHONE_H}>
+            <Phone><CmdRecovery /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-withdrawal-3" label="Withdrawal · day 3" width={PHONE_W} height={PHONE_H}>
+            <Phone><CmdWithdrawal day={3} /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-withdrawal-1" label="Withdrawal · day 1" width={PHONE_W} height={PHONE_H}>
+            <Phone><CmdWithdrawal day={1} /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-withdrawal-7" label="Withdrawal · day 7" width={PHONE_W} height={PHONE_H}>
+            <Phone><CmdWithdrawal day={7} /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-walk" label="Walk" width={PHONE_W} height={PHONE_H}>
+            <Phone time="19:00"><CmdWalk /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-eod" label="End of day" width={PHONE_W} height={PHONE_H}>
+            <Phone time="21:00"><CmdEOD /></Phone>
+          </DCArtboard>
           <DCArtboard id="a-progress" label="Progress" width={PHONE_W} height={PHONE_H}>
             <Phone><CmdProgress /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-rotation" label="Rotation editor" width={PHONE_W} height={PHONE_H}>
+            <Phone><CmdRotation /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-grocery" label="Grocery list" width={PHONE_W} height={PHONE_H}>
+            <Phone time="9:14"><CmdGrocery /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-settings" label="Settings" width={PHONE_W} height={PHONE_H}>
+            <Phone><CmdSettings /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-review" label="Weekly review" width={PHONE_W} height={PHONE_H}>
+            <Phone><CmdReview /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-hydration-fresh" label="Hydration · fresh" width={PHONE_W} height={PHONE_H}>
+            <Phone><CmdHydration state="fresh" /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-hydration-stale" label="Hydration · stale" width={PHONE_W} height={PHONE_H}>
+            <Phone><CmdHydration state="stale" /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-hydration-dry" label="Hydration · dry" width={PHONE_W} height={PHONE_H}>
+            <Phone><CmdHydration state="dry" /></Phone>
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="variation-a-live" title="A · Live Activity" subtitle="Dynamic Island + lock-screen surfaces.">
+          <DCArtboard id="a-la-compact" label="Compact · 3 states" width={PHONE_W} height={PHONE_H}>
+            <LACompactsBoard />
+          </DCArtboard>
+          <DCArtboard id="a-la-expanded" label="Expanded · 4 states" width={PHONE_W} height={PHONE_H}>
+            <LAExpandedBoard />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="variation-a-widgets" title="A · Widgets" subtitle="Home screen, three sizes.">
+          <DCArtboard id="a-widgets" label="Small / Medium / Large" width={PHONE_W} height={PHONE_H}>
+            <WidgetsBoard />
+          </DCArtboard>
+        </DCSection>
+
+        <DCSection id="variation-a-onboarding" title="A · Onboarding" subtitle="9 steps, one screen each.">
+          <DCArtboard id="a-onb-1" label="1 · Welcome" width={PHONE_W} height={PHONE_H}>
+            <Phone><OnbWelcome /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-onb-2" label="2 · Profile" width={PHONE_W} height={PHONE_H}>
+            <Phone><OnbProfile /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-onb-3" label="3 · Health" width={PHONE_W} height={PHONE_H}>
+            <Phone><OnbHealth /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-onb-4" label="4 · Notifications" width={PHONE_W} height={PHONE_H}>
+            <Phone><OnbNotifications /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-onb-5" label="5 · Scale" width={PHONE_W} height={PHONE_H}>
+            <Phone><OnbScale /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-onb-6" label="6 · Hydration" width={PHONE_W} height={PHONE_H}>
+            <Phone><OnbHydration /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-onb-7" label="7 · Quit" width={PHONE_W} height={PHONE_H}>
+            <Phone><OnbQuit /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-onb-8" label="8 · Rotation" width={PHONE_W} height={PHONE_H}>
+            <Phone><OnbRotation /></Phone>
+          </DCArtboard>
+          <DCArtboard id="a-onb-9" label="9 · Grocery" width={PHONE_W} height={PHONE_H}>
+            <Phone><OnbGrocery /></Phone>
           </DCArtboard>
         </DCSection>
 

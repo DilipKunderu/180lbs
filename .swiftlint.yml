@@ -1,0 +1,62 @@
+included:
+  - ios
+
+excluded:
+  - ios/Pods
+  - ios/.build
+  - ios/DerivedData
+  - ios/Act.xcodeproj
+  - ios/build
+
+disabled_rules:
+  - todo
+  - identifier_name
+
+opt_in_rules:
+  - force_unwrapping
+  - vertical_whitespace_closing_braces
+  - empty_count
+  - explicit_init
+  - first_where
+  - last_where
+  - sorted_first_last
+  - toggle_bool
+
+line_length:
+  warning: 140
+  error: 200
+  ignores_urls: true
+  ignores_function_declarations: false
+  ignores_comments: true
+
+type_body_length:
+  warning: 300
+  error: 500
+
+function_body_length:
+  warning: 60
+  error: 120
+
+file_length:
+  warning: 600
+  error: 1200
+  ignore_comment_only_lines: true
+
+nesting:
+  type_level:
+    warning: 3
+
+force_cast: error
+
+reporter: "github-actions-logging"
+
+custom_rules:
+  no_random_hex_color:
+    name: "No random hex colors"
+    regex: '#(?!000000\b|0A0A0A\b|141414\b|1C1C1E\b|FFFFFF\b)[0-9A-Fa-f]{6}\b'
+    match_kinds:
+      - string
+    message: "Design system locks all colors. Allowed background hex constants: #000000, #0A0A0A, #141414, #1C1C1E (white #FFFFFF for legibility tests only). For lime / amber / lava accents and all other colors, use ACTTokens (oklch-based)."
+    severity: warning
+    excluded:
+      - "ios/Act/Design/ACTTokens.swift"
