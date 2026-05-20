@@ -1,0 +1,31 @@
+#!/usr/bin/env bash
+#
+# Opt-in pre-push hook. Activate per clone with:
+#   git config core.hooksPath .githooks
+# Deactivate with:
+#   git config --unset core.hooksPath
+#
+# Runs SwiftLint on ios/ to catch lint violations before they hit CI.
+# Does not run xcodebuild test (too slow for a pre-push gate; CI handles it).
+# Designed to be fast (a few seconds) and informative on failure.
+
+set -euo pipefail
+
+if [ ! -d "ios" ]; then
+  # Nothing to lint; the project hasn't been scaffolded yet.
+  exit 0
+fi
+
+if ! command -v swiftlint >/dev/null 2>&1; then
+  echo "swiftlint not installed; install via 'brew install swiftlint' for a faster pre-push gate. Skipping." >&2
+  exit 0
+fi
+
+echo "Running SwiftLint on ios/ (pre-push gate)..."
+if ! swiftlint lint --quiet --strict ios/; then
+  echo
+  echo "Pre-push lint failed. Fix the violations above or skip the hook with --no-verify if you accept the CI failure." >&2
+  exit 1
+fi
+
+echo "SwiftLint passed."

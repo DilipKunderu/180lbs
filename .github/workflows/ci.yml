@@ -1,0 +1,102 @@
+name: CI
+
+on:
+  push:
+    branches-ignore: []
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  design-doc-check:
+    name: design-doc-check
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout (full history for immutability diff)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Fetch origin/main if remote exists
+        run: |
+          if git ls-remote --exit-code origin main >/dev/null 2>&1; then
+            git fetch origin main:refs/remotes/origin/main || true
+          else
+            echo "::notice::origin/main not reachable; immutability diff will be skipped"
+          fi
+      - name: Run design-doc invariants
+        run: bash scripts/check-design-docs.sh
+
+  swift-lint:
+    name: swift-lint
+    runs-on: macos-15
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check ios/ exists
+        id: check
+        run: |
+          if [[ -d "ios" ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ios/ does not exist yet; swift-lint is a no-op for this run"
+          fi
+      - name: Install SwiftLint
+        if: steps.check.outputs.exists == 'true'
+        run: brew install swiftlint
+      - name: Run SwiftLint
+        if: steps.check.outputs.exists == 'true'
+        run: swiftlint lint --strict --reporter github-actions-logging ios/
+
+  xcode-test:
+    name: xcode-test
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check ios/Act.xcodeproj exists
+        id: check
+        run: |
+          if [[ -d "ios/Act.xcodeproj" ]]; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::ios/Act.xcodeproj does not exist yet; xcode-test is a no-op for this run"
+          fi
+      - name: Show Xcode version
+        if: steps.check.outputs.exists == 'true'
+        run: xcodebuild -version
+      - name: Ensure iOS 18.1 simulator runtime
+        if: steps.check.outputs.exists == 'true'
+        run: |
+          if ! xcrun simctl list runtimes | grep -q "iOS 18\.1"; then
+            echo "iOS 18.1 simulator runtime not present; downloading via xcodebuild -downloadPlatform iOS"
+            sudo xcodebuild -downloadPlatform iOS -buildVersion 18.1 || sudo xcodebuild -downloadPlatform iOS
+          fi
+          xcrun simctl list runtimes | grep "iOS 18" || true
+      - name: Resolve Swift packages
+        if: steps.check.outputs.exists == 'true'
+        working-directory: ios
+        run: xcodebuild -resolvePackageDependencies -project Act.xcodeproj -scheme Act
+      - name: Build + test
+        if: steps.check.outputs.exists == 'true'
+        working-directory: ios
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -project Act.xcodeproj \
+            -scheme Act \
+            -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=18.1' \
+            -enableCodeCoverage NO \
+            -resultBundlePath TestResults.xcresult
+      - name: Upload TestResults on failure
+        if: failure() && steps.check.outputs.exists == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: TestResults-${{ github.run_id }}.xcresult
+          path: ios/TestResults.xcresult
+          retention-days: 14
