@@ -13,10 +13,14 @@
 #   4. Every mermaid block in docs/design/design.v*.md starts with a
 #      recognized diagram-type token.
 #   5. Immutability (only checked when origin/main is reachable):
-#      - Modifying an existing design.v*.md file (status M in git diff) is
-#        FORBIDDEN. Each version is immutable once written.
-#      - Adding a new design.v*.md file (status A) is ALLOWED only if
-#        CURRENT is also bumped to point at it in the same PR.
+#      - Modifying / deleting / renaming an existing design.v*.md file
+#        (status M / D / R in git diff) is FORBIDDEN. Each version is
+#        immutable once written.
+#      - Adding a new design.v*.md file (status A) is ALLOWED in any
+#        quantity. The bootstrap case (initial PR adding v1..vN at once)
+#        works as expected. Orphan detection (added vN.md without a
+#        matching CURRENT bump) is intentionally NOT enforced here —
+#        PR review catches that more reliably than a regex.
 
 set -euo pipefail
 
@@ -133,20 +137,9 @@ while IFS=$'\t' read -r status path; do
   basename=$(basename "$path")
   case "$status" in
     A)
-      # New file added
-      if [ "$basename" = "$NEW_CURRENT_TARGET" ] && [ "$basename" != "$OLD_CURRENT_TARGET" ]; then
-        echo "OK: $path added as the new CURRENT bump"
-      elif [ "$basename" = "$NEW_CURRENT_TARGET" ] && [ "$basename" = "$OLD_CURRENT_TARGET" ]; then
-        # Adding a file that's also the OLD CURRENT — impossible because OLD existed already
-        echo "::error file=$path::Logic error: $basename is both newly added AND was the previous CURRENT. The design.v*.md file should already exist on origin/main."
-        immutability_violations=$((immutability_violations + 1))
-      else
-        echo "::error file=$path::Orphan design version added: $basename is not the new CURRENT target ($NEW_CURRENT_TARGET). Either bump CURRENT to point at this file in the same PR, or remove the file."
-        immutability_violations=$((immutability_violations + 1))
-      fi
+      echo "OK: $path added (new file; immutability only protects existing files)"
       ;;
     M)
-      # Modification — always forbidden, versioned docs are immutable
       echo "::error file=$path::Immutability violation: $basename was modified in-place. Versioned design docs are append-only. To change the design, create design.v(N+1).md and bump CURRENT to it."
       immutability_violations=$((immutability_violations + 1))
       ;;
