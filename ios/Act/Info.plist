@@ -25,9 +25,15 @@
         <string>fetch</string>
         <string>processing</string>
     </array>
+    <!-- BGTaskScheduler identifiers:
+         - weekly-insight: Sunday 20:00 BGProcessingTask for the on-device weekly insight render
+         - notification-rereg: nightly ~23:55 BGAppRefreshTask to re-register the next day's batch
+         See design.v3.md §Behavior and schedule. iOS rejects BGTaskScheduler.submit
+         against any identifier not in this array. -->
     <key>BGTaskSchedulerPermittedIdentifiers</key>
     <array>
         <string>com.act.coach.weekly-insight</string>
+        <string>com.act.coach.notification-rereg</string>
     </array>
 
     <!-- ActivityKit: required for Live Activity support -->

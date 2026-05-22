@@ -7,8 +7,8 @@ final class ACTTokensTests: XCTestCase {
     func testAccentColorsAreDistinct() {
         let accents: [(name: String, color: Color)] = [
             ("lime", ACTTokens.lime),
-            ("warn", ACTTokens.warn),
-            ("red", ACTTokens.red)
+            ("amber", ACTTokens.amber),
+            ("lava", ACTTokens.lava)
         ]
 
         for i in 0..<accents.count {
