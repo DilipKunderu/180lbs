@@ -64,7 +64,7 @@ ios/
 | Live Activity extension | `com.act.coach.LiveActivity` |
 | Test bundle | `com.act.coach.Tests` |
 
-All four targets are enrolled in App Group `group.com.act.coach` (shared GRDB/SQLite container).
+The three runtime targets (app + both extensions) are enrolled in App Group `group.com.act.coach` (shared GRDB/SQLite container). The `ActTests` bundle is not in the App Group — it links the app target for in-process unit testing and has no need for the shared container.
 
 ## Capabilities wired (app target)
 

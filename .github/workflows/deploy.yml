@@ -27,16 +27,27 @@ jobs:
           else
             echo "have_secrets=true" >> "$GITHUB_OUTPUT"
           fi
-      - name: Check ios/Act.xcodeproj exists
+      - name: Install XcodeGen
         if: steps.secret_check.outputs.have_secrets == 'true'
-        id: project_check
-        run: |
-          if [[ -d "ios/Act.xcodeproj" ]]; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::error::ios/Act.xcodeproj does not exist. Run the scaffold-ios sub-task before tagging a release."
-            exit 1
-          fi
+        run: brew install xcodegen
+      - name: Generate Xcode project
+        if: steps.secret_check.outputs.have_secrets == 'true'
+        working-directory: ios
+        run: xcodegen generate
+      # TODO(deploy-todo): TestFlight signing/provisioning is NOT wired here yet.
+      # `ios/project.yml` ships with `DEVELOPMENT_TEAM: ""` and this job installs no
+      # signing certificate or provisioning profile. As a result, even with the three
+      # ASC API secrets populated, `bundle exec fastlane beta` will fail at archive/
+      # signing on a GitHub-hosted runner. The follow-up `deploy-todo` sub-task must
+      # add ONE of:
+      #   (a) fastlane match (recommended) — store certs+profiles in a private git
+      #       repo and call `match(type: "appstore", readonly: true)` in the :beta
+      #       lane before `build_ios_app`, OR
+      #   (b) Apple-issued cert + profile installed via apple-actions/import-codesign-certs
+      #       and apple-actions/download-provisioning-profiles before fastlane runs,
+      #       with DEVELOPMENT_TEAM and PROVISIONING_PROFILE_SPECIFIER injected into
+      #       project.yml via a per-config override.
+      # Until that is done, this job will fail on tag push when secrets are populated.
       - name: Set up Ruby + Bundler cache
         if: steps.secret_check.outputs.have_secrets == 'true'
         uses: ruby/setup-ruby@v1

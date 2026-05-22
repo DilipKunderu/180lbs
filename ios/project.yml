@@ -41,6 +41,14 @@ targets:
         embed: true
       - target: ActLiveActivity
         embed: true
+      # FoundationModels is Apple Intelligence's on-device LLM framework. Linking it
+      # as a required (NOT weak) dependency makes TestFlight refuse install on
+      # devices that lack the framework — i.e. anything below A17 Pro / M-series.
+      # This is the conventional install-time hardware gate for the A17/M-series
+      # floor declared in docs/design/design.v3.md. No `import FoundationModels`
+      # is needed at this stage; the linker reference alone is enough to trigger
+      # the App Store / TestFlight device-compatibility check.
+      - sdk: FoundationModels.framework
 
   ActWidgets:
     type: app-extension
