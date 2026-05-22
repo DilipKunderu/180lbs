@@ -1,0 +1,104 @@
+name: Act
+
+options:
+  bundleIdPrefix: com.act.coach
+  deploymentTarget:
+    iOS: "18.1"
+  xcodeVersion: "16.2"
+  groupSortPosition: none
+  createIntermediateGroups: true
+  defaultConfig: Debug
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "18.1"
+    TARGETED_DEVICE_FAMILY: "1"
+    ENABLE_BITCODE: "NO"
+    DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+    DEVELOPMENT_TEAM: ""
+
+configs:
+  Debug: debug
+  Release: release
+
+targets:
+  Act:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.1"
+    sources:
+      - path: Act
+        excludes:
+          - "**/*.entitlements"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.act.coach
+        INFOPLIST_FILE: Act/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Act/Act.entitlements
+    dependencies:
+      - target: ActWidgets
+        embed: true
+      - target: ActLiveActivity
+        embed: true
+
+  ActWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.1"
+    sources:
+      - path: ActWidgets
+        excludes:
+          - "**/*.entitlements"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.act.coach.Widgets
+        INFOPLIST_FILE: ActWidgets/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ActWidgets/ActWidgets.entitlements
+        SKIP_INSTALL: "YES"
+
+  ActLiveActivity:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.1"
+    sources:
+      - path: ActLiveActivity
+        excludes:
+          - "**/*.entitlements"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.act.coach.LiveActivity
+        INFOPLIST_FILE: ActLiveActivity/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ActLiveActivity/ActLiveActivity.entitlements
+        SKIP_INSTALL: "YES"
+
+  ActTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.1"
+    sources:
+      - path: ActTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.act.coach.Tests
+    dependencies:
+      - target: Act
+
+schemes:
+  Act:
+    build:
+      targets:
+        Act: all
+        ActWidgets: all
+        ActLiveActivity: all
+        ActTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - ActTests
+    profile:
+      config: Release
+    archive:
+      config: Release

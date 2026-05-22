@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleDevelopmentRegion</key>
+    <string>$(DEVELOPMENT_LANGUAGE)</string>
+    <key>CFBundleExecutable</key>
+    <string>$(EXECUTABLE_NAME)</string>
+    <key>CFBundleIdentifier</key>
+    <string>$(PRODUCT_BUNDLE_IDENTIFIER)</string>
+    <key>CFBundleInfoDictionaryVersion</key>
+    <string>6.0</string>
+    <key>CFBundleName</key>
+    <string>$(PRODUCT_NAME)</string>
+    <key>CFBundlePackageType</key>
+    <string>$(PRODUCT_BUNDLE_PACKAGE_TYPE)</string>
+    <key>CFBundleShortVersionString</key>
+    <string>1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+
+    <!-- Background processing: BGProcessingTask (weekly-insight) + background fetch -->
+    <key>UIBackgroundModes</key>
+    <array>
+        <string>fetch</string>
+        <string>processing</string>
+    </array>
+    <key>BGTaskSchedulerPermittedIdentifiers</key>
+    <array>
+        <string>com.act.coach.weekly-insight</string>
+    </array>
+
+    <!-- ActivityKit: required for Live Activity support -->
+    <key>NSSupportsLiveActivities</key>
+    <true/>
+
+    <!-- HealthKit usage descriptions (required by App Store guidelines when entitlement is present) -->
+    <key>NSHealthShareUsageDescription</key>
+    <string>Act. reads health data — active energy, workouts, and heart rate — to track your daily progress.</string>
+    <key>NSHealthUpdateUsageDescription</key>
+    <string>Act. logs workouts and body measurements to HealthKit so your data stays in one place.</string>
+
+    <!-- UI -->
+    <key>UILaunchScreen</key>
+    <dict/>
+    <key>UISupportedInterfaceOrientations</key>
+    <array>
+        <string>UIInterfaceOrientationPortrait</string>
+    </array>
+</dict>
+</plist>

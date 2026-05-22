@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <!-- HealthKit: read + write -->
+    <key>com.apple.developer.healthkit</key>
+    <true/>
+    <key>com.apple.developer.healthkit.access</key>
+    <array/>
+
+    <!-- CloudKit: iCloud private database for cross-device sync/backup -->
+    <key>com.apple.developer.icloud-container-identifiers</key>
+    <array>
+        <string>iCloud.com.act.coach</string>
+    </array>
+    <key>com.apple.developer.icloud-services</key>
+    <array>
+        <string>CloudKit</string>
+    </array>
+
+    <!-- App Groups: shared SQLite container accessible by app + extensions -->
+    <key>com.apple.security.application-groups</key>
+    <array>
+        <string>group.com.act.coach</string>
+    </array>
+
+    <!-- Push Notifications: entitlement-only; required by ActivityKit to start a Live Activity.
+         NO APNs key is generated; NO production/sandbox APNs endpoint exists in this system.
+         Set to "development" here; provisioning profile overrides to "production" for distribution. -->
+    <key>aps-environment</key>
+    <string>development</string>
+</dict>
+</plist>
