@@ -22,6 +22,13 @@ extension UrgeLogRow {
               let triggersJSON = record.string(forKey: "triggers"),
               let didBreathing = record.bool(forKey: "did_breathing"),
               let breathingCyclesCompleted = record.int(forKey: "breathing_cycles_completed") else { return nil }
-        self.init(id: id, loggedAt: loggedAt, intensity: intensity, triggersJSON: triggersJSON, didBreathing: didBreathing, breathingCyclesCompleted: breathingCyclesCompleted)
+        self.init(
+            id: id,
+            loggedAt: loggedAt,
+            intensity: intensity,
+            triggersJSON: triggersJSON,
+            didBreathing: didBreathing,
+            breathingCyclesCompleted: breathingCyclesCompleted
+        )
     }
 }

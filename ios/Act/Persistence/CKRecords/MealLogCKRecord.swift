@@ -28,6 +28,16 @@ extension MealLogRow {
               let carbsG = record.int(forKey: "carbs_g"),
               let fatG = record.int(forKey: "fat_g"),
               let includedShake = record.bool(forKey: "included_shake") else { return nil }
-        self.init(id: id, mealDate: mealDate, loggedAt: loggedAt, dishName: dishName, kcal: kcal, proteinG: proteinG, carbsG: carbsG, fatG: fatG, includedShake: includedShake)
+        self.init(
+            id: id,
+            mealDate: mealDate,
+            loggedAt: loggedAt,
+            dishName: dishName,
+            kcal: kcal,
+            proteinG: proteinG,
+            carbsG: carbsG,
+            fatG: fatG,
+            includedShake: includedShake
+        )
     }
 }

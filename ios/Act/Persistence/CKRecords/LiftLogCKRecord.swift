@@ -25,6 +25,14 @@ extension LiftLogRow {
               let weightLb = record.double(forKey: "weight_lb"),
               let reps = record.int(forKey: "reps"),
               let restSec = record.int(forKey: "rest_sec") else { return nil }
-        self.init(id: id, liftSessionID: liftSessionID, exercise: exercise, setNumber: setNumber, weightLb: weightLb, reps: reps, restSec: restSec)
+        self.init(
+            id: id,
+            liftSessionID: liftSessionID,
+            exercise: exercise,
+            setNumber: setNumber,
+            weightLb: weightLb,
+            reps: reps,
+            restSec: restSec
+        )
     }
 }

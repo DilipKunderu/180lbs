@@ -29,6 +29,16 @@ extension RotationRow {
               let prescribedProteinG = record.int(forKey: "prescribed_protein_g"),
               let prescribedCarbsG = record.int(forKey: "prescribed_carbs_g"),
               let prescribedFatG = record.int(forKey: "prescribed_fat_g") else { return nil }
-        self.init(id: id, weekIndex: weekIndex, slot: slot, dishName: dishName, prescribedKcal: prescribedKcal, prescribedProteinG: prescribedProteinG, prescribedCarbsG: prescribedCarbsG, prescribedFatG: prescribedFatG, recipeURL: record.string(forKey: "recipe_url"))
+        self.init(
+            id: id,
+            weekIndex: weekIndex,
+            slot: slot,
+            dishName: dishName,
+            prescribedKcal: prescribedKcal,
+            prescribedProteinG: prescribedProteinG,
+            prescribedCarbsG: prescribedCarbsG,
+            prescribedFatG: prescribedFatG,
+            recipeURL: record.string(forKey: "recipe_url")
+        )
     }
 }

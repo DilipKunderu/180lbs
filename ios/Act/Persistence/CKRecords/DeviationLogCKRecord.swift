@@ -25,6 +25,14 @@ extension DeviationLogRow {
               let reason = record.string(forKey: "reason"),
               let kcalEst = record.int(forKey: "kcal_est"),
               let proteinGEst = record.int(forKey: "protein_g_est") else { return nil }
-        self.init(id: id, mealDate: mealDate, loggedAt: loggedAt, reason: reason, photoURL: record.string(forKey: "photo"), kcalEst: kcalEst, proteinGEst: proteinGEst)
+        self.init(
+            id: id,
+            mealDate: mealDate,
+            loggedAt: loggedAt,
+            reason: reason,
+            photoURL: record.string(forKey: "photo"),
+            kcalEst: kcalEst,
+            proteinGEst: proteinGEst
+        )
     }
 }
