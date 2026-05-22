@@ -66,6 +66,12 @@ jobs:
         run: xcodebuild -resolvePackageDependencies -project Act.xcodeproj -scheme Act
       - name: Build + test
         working-directory: ios
+        # SNAPSHOT_TESTING_RECORD=never: fail loudly if a reference PNG is absent
+        # rather than silently creating it in the ephemeral runner and losing it.
+        # Developers must run with SNAPSHOT_TESTING_RECORD=all locally and commit
+        # the generated PNGs before CI will accept snapshot tests.
+        env:
+          SNAPSHOT_TESTING_RECORD: never
         run: |
           set -o pipefail
           xcodebuild test \
@@ -82,4 +88,17 @@ jobs:
         with:
           name: TestResults-${{ github.run_id }}.xcresult
           path: ios/TestResults.xcresult
+          retention-days: 14
+      - name: Upload __snapshots__ directory for human verification
+        # CI runs with SNAPSHOT_TESTING_RECORD=never, so it does NOT seed new
+        # PNGs — a missing reference is a hard test failure. This artifact
+        # exposes the PNGs that ARE committed (plus any failure-diff PNGs
+        # swift-snapshot-testing writes alongside on mismatch) so reviewers can
+        # inspect rendered references without an iOS 18.1 simulator locally.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: snapshots-${{ github.run_id }}
+          path: ios/ActTests/__snapshots__/
+          if-no-files-found: ignore
           retention-days: 14
