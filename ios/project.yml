@@ -4,6 +4,9 @@ packages:
   SnapshotTesting:
     url: https://github.com/pointfreeco/swift-snapshot-testing
     from: "1.17.0"
+  GRDB:
+    url: https://github.com/groue/GRDB.swift
+    from: "7.10.0"
 
 options:
   bundleIdPrefix: com.act.coach
@@ -61,6 +64,7 @@ targets:
         embed: true
       - target: ActLiveActivity
         embed: true
+      - package: GRDB
 
   ActWidgets:
     type: app-extension

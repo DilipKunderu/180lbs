@@ -87,6 +87,10 @@ The three runtime targets (app + both extensions) are enrolled in App Group `gro
 | Background Fetch + Processing | `BGProcessingTask` id: `com.act.coach.weekly-insight` |
 | Live Activities (`NSSupportsLiveActivities`) | ActivityKit via Live Activity extension |
 
+## Persistence layer
+
+Act. uses a local-first persistence split defined by `docs/design/design.v3.md` §Data model: all 15 user-domain entities are represented as CloudKit `CKRecord` types, and the app reads/writes through a GRDB SQLite mirror for fast on-device queries and offline-first writes. The SQLite file is shared across the app, WidgetKit extension, and Live Activity extension via the App Group container path `FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.act.coach")!.appendingPathComponent("act.sqlite")`, so every runtime surface sees the same data without cross-sandbox read failures.
+
 ## Running tests locally
 
 ```bash
