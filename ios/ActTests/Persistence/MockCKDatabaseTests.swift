@@ -91,6 +91,56 @@ final class MockCKDatabaseTests: XCTestCase {
         wait(for: [didFetch], timeout: 1)
     }
 
+    // MARK: - zone isolation (record identity = recordName + zoneID)
+
+    func test_save_distinguishes_records_with_same_recordName_in_different_zones() {
+        let zoneA = CKRecordZone.ID(zoneName: "ZoneA", ownerName: CKCurrentUserDefaultName)
+        let zoneB = CKRecordZone.ID(zoneName: "ZoneB", ownerName: CKCurrentUserDefaultName)
+        let idA = CKRecord.ID(recordName: "shared-name", zoneID: zoneA)
+        let idB = CKRecord.ID(recordName: "shared-name", zoneID: zoneB)
+        let recordA = CKRecord(recordType: "MEAL_LOG", recordID: idA)
+        recordA["zone"] = "A"
+        let recordB = CKRecord(recordType: "MEAL_LOG", recordID: idB)
+        recordB["zone"] = "B"
+
+        let didSaveBoth = expectation(description: "both saved")
+        didSaveBoth.expectedFulfillmentCount = 2
+        db.save(recordA) { _, _ in didSaveBoth.fulfill() }
+        db.save(recordB) { _, _ in didSaveBoth.fulfill() }
+        wait(for: [didSaveBoth], timeout: 1)
+
+        XCTAssertEqual(
+            db.allRecords(ofType: "MEAL_LOG").count, 2,
+            "records with the same recordName in different zones must coexist"
+        )
+
+        let didDelete = expectation(description: "delete zoneA")
+        db.delete(withRecordID: idA) { _, error in
+            XCTAssertNil(error, "delete must succeed for zoneA record")
+            didDelete.fulfill()
+        }
+        wait(for: [didDelete], timeout: 1)
+
+        let didFetchA = expectation(description: "fetch zoneA after delete")
+        db.fetch(withRecordID: idA) { result, error in
+            XCTAssertNil(result, "deleted record from zoneA must not return")
+            XCTAssertNotNil(error, "fetch must error after delete")
+            didFetchA.fulfill()
+        }
+        wait(for: [didFetchA], timeout: 1)
+
+        let didFetchB = expectation(description: "fetch zoneB still present")
+        db.fetch(withRecordID: idB) { result, error in
+            XCTAssertNil(error, "fetch must succeed for zoneB record")
+            XCTAssertEqual(
+                result?["zone"] as? String, "B",
+                "zoneB record must be untouched by zoneA delete"
+            )
+            didFetchB.fulfill()
+        }
+        wait(for: [didFetchB], timeout: 1)
+    }
+
     // MARK: - allRecords type isolation
 
     func test_allRecords_returns_only_the_requested_type() {

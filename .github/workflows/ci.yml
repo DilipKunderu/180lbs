@@ -89,12 +89,12 @@ jobs:
           name: TestResults-${{ github.run_id }}.xcresult
           path: ios/TestResults.xcresult
           retention-days: 14
-      - name: Upload newly-recorded snapshots
-        # When a snapshot test runs for the first time, swift-snapshot-testing
-        # writes the reference PNG to the source tree but the test fails
-        # (record mode is on). Upload the directory so the developer can
-        # download, inspect, and commit the CI-rendered PNGs without needing
-        # an iOS 18.1 simulator locally.
+      - name: Upload __snapshots__ directory for human verification
+        # CI runs with SNAPSHOT_TESTING_RECORD=never, so it does NOT seed new
+        # PNGs — a missing reference is a hard test failure. This artifact
+        # exposes the PNGs that ARE committed (plus any failure-diff PNGs
+        # swift-snapshot-testing writes alongside on mismatch) so reviewers can
+        # inspect rendered references without an iOS 18.1 simulator locally.
         if: always()
         uses: actions/upload-artifact@v4
         with:

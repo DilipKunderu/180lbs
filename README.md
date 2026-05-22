@@ -95,7 +95,7 @@ xcodegen generate
 xcodebuild test \
   -project Act.xcodeproj \
   -scheme Act \
-  -destination 'platform=iOS Simulator,name=iPhone 13 Pro,OS=18.1' \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO
 ```
@@ -114,7 +114,7 @@ xcodegen generate
 SNAPSHOT_TESTING_RECORD=all xcodebuild test \
   -project Act.xcodeproj \
   -scheme Act \
-  -destination 'platform=iOS Simulator,name=iPhone 13 Pro,OS=18.1' \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO
 # tests will "fail" with "Record mode is on" — that is expected
@@ -124,14 +124,15 @@ git commit -m "chore(snapshots): record reference PNGs for <feature>"
 xcodebuild test \
   -project Act.xcodeproj \
   -scheme Act \
-  -destination 'platform=iOS Simulator,name=iPhone 13 Pro,OS=18.1' \
+  -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO
 ```
 
-> **Device consistency:** Reference PNGs are rendered at iPhone 13 Pro
-> dimensions. Always use the same `-destination` device when recording so that
-> CI comparisons are pixel-exact.
+> **Device consistency:** Reference PNGs render at `ViewImageConfig.iPhone13Pro`
+> layout dimensions (deterministic across simulators), but always pass the
+> same `-destination` simulator that CI uses (`iPhone 16 Pro`, iOS 18.1) so
+> that font hinting and text layout match CI byte-for-byte.
 
 ## TestFlight / CI/CD
 
