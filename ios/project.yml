@@ -1,5 +1,10 @@
 name: Act
 
+packages:
+  SnapshotTesting:
+    url: https://github.com/pointfreeco/swift-snapshot-testing
+    from: "1.17.0"
+
 options:
   bundleIdPrefix: com.act.coach
   deploymentTarget:
@@ -98,6 +103,7 @@ targets:
         PRODUCT_BUNDLE_IDENTIFIER: com.act.coach.Tests
     dependencies:
       - target: Act
+      - package: SnapshotTesting
 
 schemes:
   Act:

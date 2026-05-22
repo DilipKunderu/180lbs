@@ -52,7 +52,17 @@ ios/
 │   ├── Info.plist
 │   └── ActLiveActivity.entitlements
 └── ActTests/                # Unit-test target  (com.act.coach.Tests)
-    └── ActTests.swift
+    ├── ActTests.swift           # scaffold smoke test
+    ├── ACTTokensTests.swift     # design-token invariants
+    ├── __snapshots__/           # committed reference PNGs (regenerate with SNAPSHOT_TESTING_RECORD=all)
+    ├── Coordinators/            # TodayCoordinator / HydrationMonitor / CessationCoordinator tests (future)
+    ├── Persistence/             # MockCKDatabase harness + invariant tests
+    │   └── MockCKDatabaseTests.swift
+    ├── Snapshots/               # SwiftUI snapshot tests (one per feature view, added per todo)
+    │   └── ContentViewSnapshotTests.swift
+    └── Support/                 # shared test helpers
+        ├── MockCKDatabase.swift # in-memory CKDatabase shim (CI-safe, no real CloudKit)
+        └── SnapshotTestCase.swift  # XCTestCase base class for snapshot tests
 ```
 
 ### Target bundle IDs
@@ -85,10 +95,43 @@ xcodegen generate
 xcodebuild test \
   -project Act.xcodeproj \
   -scheme Act \
-  -destination 'platform=iOS Simulator,name=iPhone 15 Pro,OS=18.1' \
+  -destination 'platform=iOS Simulator,name=iPhone 13 Pro,OS=18.1' \
   CODE_SIGNING_ALLOWED=NO \
   CODE_SIGNING_REQUIRED=NO
 ```
+
+### Snapshot tests — recording reference images
+
+Snapshot tests compare rendered SwiftUI views against committed PNGs in
+`ios/ActTests/__snapshots__/`. CI sets `SNAPSHOT_TESTING_RECORD=never` so a
+missing reference is a hard failure.
+
+**First run / update workflow:**
+
+```bash
+cd ios
+xcodegen generate
+SNAPSHOT_TESTING_RECORD=all xcodebuild test \
+  -project Act.xcodeproj \
+  -scheme Act \
+  -destination 'platform=iOS Simulator,name=iPhone 13 Pro,OS=18.1' \
+  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO
+# tests will "fail" with "Record mode is on" — that is expected
+git add ios/ActTests/__snapshots__/
+git commit -m "chore(snapshots): record reference PNGs for <feature>"
+# run tests again without the env var to confirm they pass
+xcodebuild test \
+  -project Act.xcodeproj \
+  -scheme Act \
+  -destination 'platform=iOS Simulator,name=iPhone 13 Pro,OS=18.1' \
+  CODE_SIGNING_ALLOWED=NO \
+  CODE_SIGNING_REQUIRED=NO
+```
+
+> **Device consistency:** Reference PNGs are rendered at iPhone 13 Pro
+> dimensions. Always use the same `-destination` device when recording so that
+> CI comparisons are pixel-exact.
 
 ## TestFlight / CI/CD
 
