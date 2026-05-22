@@ -26,8 +26,8 @@ enum ACTTokens {
     static let lime = displayP3(red: 0.740269395, green: 0.927940411, blue: 0.469701247)
     static let limeDim = displayP3(red: 0.740269395, green: 0.927940411, blue: 0.469701247, opacity: 0.18)
     static let limeText = sRGB(0, 0, 0)
-    static let warn = displayP3(red: 0.950176229, green: 0.628477570, blue: 0.313815094)
-    static let red = displayP3(red: 0.941163343, green: 0.357008882, blue: 0.332678471)
+    static let amber = displayP3(red: 0.950176229, green: 0.628477570, blue: 0.313815094)
+    static let lava = displayP3(red: 0.941163343, green: 0.357008882, blue: 0.332678471)
 
     enum TypeScale: Int, CaseIterable {
         case s120 = 120
