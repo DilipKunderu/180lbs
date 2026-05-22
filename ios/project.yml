@@ -1,0 +1,119 @@
+name: Act
+
+options:
+  bundleIdPrefix: com.act.coach
+  deploymentTarget:
+    iOS: "18.1"
+  xcodeVersion: "16.2"
+  groupSortPosition: none
+  createIntermediateGroups: true
+  defaultConfig: Debug
+
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    IPHONEOS_DEPLOYMENT_TARGET: "18.1"
+    TARGETED_DEVICE_FAMILY: "1"
+    ENABLE_BITCODE: "NO"
+    DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
+    DEVELOPMENT_TEAM: ""
+
+configs:
+  Debug: debug
+  Release: release
+
+targets:
+  Act:
+    type: application
+    platform: iOS
+    deploymentTarget: "18.1"
+    sources:
+      - path: Act
+        excludes:
+          - "**/*.entitlements"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.act.coach
+        INFOPLIST_FILE: Act/Info.plist
+        CODE_SIGN_ENTITLEMENTS: Act/Act.entitlements
+        # FoundationModels is Apple Intelligence's on-device LLM framework and is
+        # available only on A17 Pro / M-series hardware. The framework ships in the
+        # iPhoneOS SDK (device archives) but NOT in the iPhoneSimulator SDK in the
+        # current Xcode toolchain (16.4 → iPhoneSimulator18.5.sdk on CI runners),
+        # so an unconditional link breaks simulator builds.
+        #
+        # The SDK-conditional OTHER_LDFLAGS below adds the linker reference only
+        # for `iphoneos*` SDK builds. Device archives uploaded to TestFlight carry
+        # an LC_LOAD_DYLIB for FoundationModels, which is the load command the App
+        # Store hardware-compatibility check reads at install time to refuse install
+        # on devices that lack the framework — i.e. anything below A17 Pro / M-series.
+        # Simulator builds skip the flag entirely and compile cleanly. No
+        # `import FoundationModels` is needed at this stage; the linker reference
+        # alone is what triggers the install-time gate declared in design.v3.md.
+        "OTHER_LDFLAGS[sdk=iphoneos*]": "-framework FoundationModels"
+    dependencies:
+      - target: ActWidgets
+        embed: true
+      - target: ActLiveActivity
+        embed: true
+
+  ActWidgets:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.1"
+    sources:
+      - path: ActWidgets
+        excludes:
+          - "**/*.entitlements"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.act.coach.Widgets
+        INFOPLIST_FILE: ActWidgets/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ActWidgets/ActWidgets.entitlements
+        SKIP_INSTALL: "YES"
+
+  ActLiveActivity:
+    type: app-extension
+    platform: iOS
+    deploymentTarget: "18.1"
+    sources:
+      - path: ActLiveActivity
+        excludes:
+          - "**/*.entitlements"
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.act.coach.LiveActivity
+        INFOPLIST_FILE: ActLiveActivity/Info.plist
+        CODE_SIGN_ENTITLEMENTS: ActLiveActivity/ActLiveActivity.entitlements
+        SKIP_INSTALL: "YES"
+
+  ActTests:
+    type: bundle.unit-test
+    platform: iOS
+    deploymentTarget: "18.1"
+    sources:
+      - path: ActTests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.act.coach.Tests
+    dependencies:
+      - target: Act
+
+schemes:
+  Act:
+    build:
+      targets:
+        Act: all
+        ActWidgets: all
+        ActLiveActivity: all
+        ActTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - ActTests
+    profile:
+      config: Release
+    archive:
+      config: Release
