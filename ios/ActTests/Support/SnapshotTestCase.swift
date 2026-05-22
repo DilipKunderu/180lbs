@@ -77,28 +77,47 @@ class SnapshotTestCase: XCTestCase {
         )
     }
 
-    // MARK: - Bootstrap helper
+    // MARK: - Bootstrap-only skip helper
 
-    /// Skips the calling test when no reference PNG matching `token` exists in
-    /// `ios/ActTests/__snapshots__/`.
+    /// **BOOTSTRAP PATH ONLY.** Skips the calling test when no reference PNG
+    /// matching `token` exists in `ios/ActTests/__snapshots__/`.
     ///
-    /// `token` is matched as a case-sensitive substring against PNG filenames
-    /// (typically the test class name or test method name). This keeps each
-    /// snapshot test's bootstrap-skip independent: once the first feature
-    /// snapshot is committed it does **not** force unrelated tests to also
-    /// have their references committed in the same commit.
+    /// ## Contributor contract
+    /// Real feature snapshot tests (`Cmd*`, `Onb*`, `LA*`, `Widget*`) **MUST
+    /// commit their reference PNGs in the same PR that adds the test** and
+    /// **MUST NOT call this helper**. CI hard-fails on a snapshot mismatch
+    /// (`SNAPSHOT_TESTING_RECORD=never`); calling this helper bypasses that
+    /// hard-fail by turning a missing reference into a silent skip, which
+    /// erodes coverage if used outside the bootstrap path.
     ///
-    /// Once a developer records the reference (via `SNAPSHOT_TESTING_RECORD=all`)
-    /// and commits the PNG, this skip becomes a hard equality assertion.
-    func skipIfReferenceMissing(named token: String) throws {
+    /// The only sanctioned use is the test-scaffold's `ContentView` sample,
+    /// which proves the harness compiles before a real reference is recorded.
+    /// Once the first feature snapshot test lands with its reference PNG, the
+    /// sample test should be removed and this helper can be deprecated.
+    ///
+    /// ## Behaviour
+    /// `token` is matched as a case-sensitive substring against PNG filenames.
+    /// When the test skips, this helper emits an `XCTAttachment` named
+    /// `"BOOTSTRAP-SKIP-<token>"` with a human-readable warning so the skip
+    /// is visible in test logs and `.xcresult` bundles — not silent.
+    func XCTBootstrapSkipIfReferenceMissing(named token: String) throws {
         let files = (try? FileManager.default.contentsOfDirectory(atPath: Self.snapshotDirectory)) ?? []
         let hasMatch = files.contains { $0.hasSuffix(".png") && $0.contains(token) }
         guard hasMatch else {
-            throw XCTSkip(
-                "No reference PNG matching '\(token)' in ios/ActTests/__snapshots__/. " +
-                "Run with SNAPSHOT_TESTING_RECORD=all locally and commit the generated image. " +
-                "See README → Snapshot tests — recording reference images."
-            )
+            let warning = """
+                BOOTSTRAP SKIP — no reference PNG matching '\(token)' in ios/ActTests/__snapshots__/.
+
+                Run with SNAPSHOT_TESTING_RECORD=all locally and commit the generated image.
+                See README → Snapshot tests — recording reference images.
+
+                NOTE: this skip is the bootstrap-only path. Real feature snapshot tests
+                MUST commit references in the same PR and MUST NOT use this helper.
+                """
+            let attachment = XCTAttachment(string: warning)
+            attachment.name = "BOOTSTRAP-SKIP-\(token)"
+            attachment.lifetime = .keepAlways
+            add(attachment)
+            throw XCTSkip(warning)
         }
     }
 }

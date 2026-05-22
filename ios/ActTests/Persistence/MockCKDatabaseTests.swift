@@ -141,6 +141,34 @@ final class MockCKDatabaseTests: XCTestCase {
         wait(for: [didFetchB], timeout: 1)
     }
 
+    // MARK: - re-entrant completion handler safety
+
+    /// Regression test: calling `allRecords(ofType:)` (which uses `queue.sync`)
+    /// from inside a `save` completion handler must NOT deadlock.
+    ///
+    /// Real `CKDatabase` invokes completion handlers on an arbitrary background
+    /// queue rather than its internal serialization queue, and the schema
+    /// todo's tests follow the same pattern (`db.save(record) { _, _ in
+    /// XCTAssertEqual(db.allRecords(...).count, 1) }`). If the mock fires
+    /// completions on its own storage queue, the inner `allRecords` call
+    /// re-enters the queue under `sync`, which deadlocks until this test's
+    /// expectation times out.
+    func test_completion_handlers_can_reentrantly_inspect_state() {
+        let recordID = CKRecord.ID(recordName: "reentrant-001")
+        let record = CKRecord(recordType: "PROFILE", recordID: recordID)
+
+        let didComplete = expectation(description: "save completion can call allRecords")
+        db.save(record) { [weak db] _, error in
+            XCTAssertNil(error, "save must succeed")
+            XCTAssertEqual(
+                db?.allRecords(ofType: "PROFILE").count, 1,
+                "allRecords must be callable from inside save completion without deadlocking"
+            )
+            didComplete.fulfill()
+        }
+        wait(for: [didComplete], timeout: 1.0)
+    }
+
     // MARK: - allRecords type isolation
 
     func test_allRecords_returns_only_the_requested_type() {

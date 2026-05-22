@@ -3,9 +3,11 @@ import XCTest
 
 /// Sample-shape snapshot test that proves the SnapshotTestCase harness works.
 ///
-/// This is the only snapshot test that should live in this file. All real
-/// feature snapshot tests are added in their respective todos (Cmd*/Onb*/LA*/
-/// Widget*) once those views exist.
+/// This is the **only** test sanctioned to call the bootstrap-skip helper.
+/// All real feature snapshot tests (Cmd*/Onb*/LA*/Widget*) must commit their
+/// reference PNGs in the same PR that adds the test and must NOT skip on a
+/// missing reference. Once the first feature snapshot test lands, this file
+/// can be removed.
 ///
 /// Reference PNGs live in `ios/ActTests/__snapshots__/`. While no PNG matching
 /// this test's token is committed, the test skips so CI stays green. To add
@@ -22,10 +24,9 @@ import XCTest
 final class ContentViewSnapshotTests: SnapshotTestCase {
 
     func test_contentView_renders_dark_iphone13pro() throws {
-        // Per-test skip token: matched as a substring against PNG filenames in
-        // __snapshots__/ so committing an unrelated feature's reference does
-        // NOT force this test to also have its reference committed.
-        try skipIfReferenceMissing(named: "ContentView")
+        // BOOTSTRAP-ONLY: see SnapshotTestCase.XCTBootstrapSkipIfReferenceMissing
+        // doc-comment. Real feature snapshot tests must NOT call this.
+        try XCTBootstrapSkipIfReferenceMissing(named: "ContentView")
         assertViewSnapshot(ContentView())
     }
 }
