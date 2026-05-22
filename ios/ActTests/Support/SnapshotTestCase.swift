@@ -52,6 +52,16 @@ class SnapshotTestCase: XCTestCase {
     /// the host simulator device, so renders are deterministic across local /
     /// CI as long as the simulator OS matches (iOS 18.1).
     ///
+    /// ## Why `verifySnapshot` and not `assertSnapshot`?
+    /// `assertSnapshot` (≥ 1.17) no longer accepts a `snapshotDirectory:`
+    /// parameter — by default it writes to a `__Snapshots__/` directory next
+    /// to the test file. We want all references in a single
+    /// `ios/ActTests/__snapshots__/` directory regardless of which `Snapshots/`
+    /// sub-folder the test lives in, so this helper calls `verifySnapshot`
+    /// directly (which still accepts `snapshotDirectory:`) and surfaces the
+    /// returned failure message via `XCTFail`. This is the migration pattern
+    /// recommended by the library's own `verifySnapshot` docstring.
+    ///
     /// Pass `file:` and `testName:` only if you need to override the defaults;
     /// Swift's default-argument macros capture the correct call site automatically.
     func assertViewSnapshot<V: View>(
@@ -61,7 +71,7 @@ class SnapshotTestCase: XCTestCase {
         testName: String = #function,
         line: UInt = #line
     ) {
-        assertSnapshot(
+        let failure = verifySnapshot(
             of: view,
             as: .image(
                 layout: .device(config: .iPhone13Pro),
@@ -70,11 +80,15 @@ class SnapshotTestCase: XCTestCase {
                 ])
             ),
             named: name,
+            record: nil,
             snapshotDirectory: Self.snapshotDirectory,
             file: file,
             testName: testName,
             line: line
         )
+        if let failure {
+            XCTFail(failure, file: file, line: line)
+        }
     }
 
     // MARK: - Bootstrap-only skip helper
