@@ -73,7 +73,6 @@ final class LocalStore {
     func upsertHydrationLog(_ row: HydrationLogRow) throws {
         try databaseQueue.write { db in
             var row = row
-            let day = PersistenceDate.calendarDateString(from: row.loggedAt, calendar: calendar)
             let total = try Int.fetchOne(
                 db,
                 sql: "SELECT COALESCE(SUM(oz), 0) FROM hydration_log WHERE date(logged_at) = date(?)",
@@ -82,8 +81,6 @@ final class LocalStore {
             row.runningTotalOzCached = total + row.oz
             try row.save(db)
             try cloudDatabase?.save(record: row.toCKRecord())
-
-            _ = day
         }
     }
 
@@ -220,7 +217,6 @@ final class LocalStore {
         guard let date = formatter.date(from: value) else { return nil }
         return calendar.startOfDay(for: date)
     }
-
 }
 
 private extension LocalStore {
