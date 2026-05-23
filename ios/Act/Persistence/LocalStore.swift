@@ -226,7 +226,7 @@ final class LocalStore {
 private extension LocalStore {
     func migrateIfNeeded() throws {
         var migrator = DatabaseMigrator()
-        migrator.registerMigration("v1_schema") { db in
+        migrator.registerMigration("v1_schema") { [self] db in
             try createProfileTable(in: db)
             try createWeightTable(in: db)
             try createLiftTables(in: db)
