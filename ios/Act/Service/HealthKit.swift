@@ -13,19 +13,19 @@ public enum HealthKitReadType: CaseIterable {
     var objectType: HKObjectType {
         switch self {
         case .bodyMass:
-            HKObjectType.quantityType(forIdentifier: .bodyMass)!
+            HKQuantityType(.bodyMass)
         case .stepCount:
-            HKObjectType.quantityType(forIdentifier: .stepCount)!
+            HKQuantityType(.stepCount)
         case .sleepAnalysis:
-            HKObjectType.categoryType(forIdentifier: .sleepAnalysis)!
+            HKCategoryType(.sleepAnalysis)
         case .restingHeartRate:
-            HKObjectType.quantityType(forIdentifier: .restingHeartRate)!
+            HKQuantityType(.restingHeartRate)
         case .heartRateVariabilitySDNN:
-            HKObjectType.quantityType(forIdentifier: .heartRateVariabilitySDNN)!
+            HKQuantityType(.heartRateVariabilitySDNN)
         case .vo2Max:
-            HKObjectType.quantityType(forIdentifier: .vo2Max)!
+            HKQuantityType(.vo2Max)
         case .dietaryWater:
-            HKObjectType.quantityType(forIdentifier: .dietaryWater)!
+            HKQuantityType(.dietaryWater)
         }
     }
 }
@@ -40,9 +40,9 @@ public enum HealthKitWriteType: CaseIterable {
         case .workouts:
             HKObjectType.workoutType()
         case .dietaryEnergyConsumed:
-            HKObjectType.quantityType(forIdentifier: .dietaryEnergyConsumed)!
+            HKQuantityType(.dietaryEnergyConsumed)
         case .dietaryWater:
-            HKObjectType.quantityType(forIdentifier: .dietaryWater)!
+            HKQuantityType(.dietaryWater)
         }
     }
 }
@@ -147,7 +147,7 @@ public final class HealthKitService {
         public static let manualTap = "manual_tap"
     }
 
-    public static let hydrationSampleType = HKObjectType.quantityType(forIdentifier: .dietaryWater)!
+    public static let hydrationSampleType = HKQuantityType(.dietaryWater)
 
     private let healthStore: HealthStoreProtocol
     private var hydrationObserverQuery: HKObserverQuery?
@@ -164,7 +164,7 @@ public final class HealthKitService {
         let readTypes = Set(HealthKitReadType.allCases.map(\.objectType))
         let writeTypes = Set(HealthKitWriteType.allCases.map(\.sampleType))
 
-        try await withCheckedThrowingContinuation { continuation in
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             healthStore.requestAuthorization(toShare: writeTypes, read: readTypes) { _, error in
                 if let error {
                     continuation.resume(throwing: error)
