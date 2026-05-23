@@ -336,7 +336,8 @@ final class LocalStoreTests: XCTestCase {
 
     func test_hydrationRunningTotal_usesWallClockDate_notUTC() throws {
         var pacific = Calendar(identifier: .gregorian)
-        pacific.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        // Fall back to GMT only if the IANA db is missing — never expected on iOS.
+        pacific.timeZone = TimeZone(identifier: "America/Los_Angeles") ?? .gmt
         let queue = try DatabaseQueue()
         let pacificStore = try LocalStore(
             database: queue,
@@ -423,7 +424,7 @@ final class LocalStoreTests: XCTestCase {
 
     private static func utcCalendar() -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        calendar.timeZone = .gmt
         return calendar
     }
 
