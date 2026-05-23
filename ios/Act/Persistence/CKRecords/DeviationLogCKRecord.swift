@@ -2,7 +2,9 @@ import CloudKit
 import Foundation
 
 extension DeviationLogRow {
-    static func recordID(for id: UUID = UUID()) -> CKRecord.ID { CKRecord.ID(recordName: id.uuidString) }
+    static func recordID(for id: UUID = UUID()) -> CKRecord.ID {
+        CKRecord.ID(recordName: id.uuidString)
+    }
 
     func toCKRecord() -> CKRecord {
         let record = CKRecord(recordType: Self.recordType, recordID: Self.recordID(for: id))
@@ -10,7 +12,10 @@ extension DeviationLogRow {
         record["logged_at"] = loggedAt
         record["reason"] = reason
         if let photoURL {
-            record["photo"] = photoURL
+            // `design.v3 §Data model:259`: DEVIATION_LOG.photo is a CKAsset on the
+            // CloudKit record. The local-store side keeps the URL pointer; CKAsset
+            // wraps the same fileURL so callers never need to read the bytes.
+            record["photo"] = CKAsset(fileURL: photoURL)
         }
         record["kcal_est"] = kcalEst
         record["protein_g_est"] = proteinGEst
@@ -25,12 +30,13 @@ extension DeviationLogRow {
               let reason = record.string(forKey: "reason"),
               let kcalEst = record.int(forKey: "kcal_est"),
               let proteinGEst = record.int(forKey: "protein_g_est") else { return nil }
+        let photoURL = (record["photo"] as? CKAsset)?.fileURL
         self.init(
             id: id,
             mealDate: mealDate,
             loggedAt: loggedAt,
             reason: reason,
-            photoURL: record.string(forKey: "photo"),
+            photoURL: photoURL,
             kcalEst: kcalEst,
             proteinGEst: proteinGEst
         )

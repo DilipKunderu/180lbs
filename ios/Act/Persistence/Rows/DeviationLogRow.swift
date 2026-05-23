@@ -9,7 +9,7 @@ struct DeviationLogRow: Codable, FetchableRecord, PersistableRecord {
     var mealDate: String
     var loggedAt: Date
     var reason: String
-    var photoURL: String?
+    var photoURL: URL?
     var kcalEst: Int
     var proteinGEst: Int
 
