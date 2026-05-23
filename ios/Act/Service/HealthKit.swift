@@ -184,7 +184,8 @@ public actor HealthKitService {
 
     private let healthStore: HealthStoreProtocol
     private var hydrationObserverQuery: HKObserverQuery?
-    private var hydrationBackgroundDeliveryEnabled = false
+    private var hydrationObserverOnUpdate: (@Sendable () -> Void)?
+    private var hydrationBackgroundDeliveryRequested = false
 
     public init() {
         self.healthStore = HKHealthStore()
@@ -221,21 +222,29 @@ public actor HealthKitService {
         if let existing = hydrationObserverQuery {
             healthStore.stop(existing)
         }
+        hydrationObserverOnUpdate = onUpdate
 
         let query = HKObserverQuery(sampleType: Self.hydrationSampleType, predicate: nil) { [weak self] _, completion, error in
             defer { completion() }
             guard error == nil else { return }
-            Task { await self?.handleObserverFired(notify: onUpdate) }
+            Task { await self?.handleObserverFired() }
         }
 
         hydrationObserverQuery = query
         healthStore.execute(query)
 
-        // Background hydration wakeups improve freshness accuracy but consume
-        // BGAppRefreshTask budget more aggressively on high-frequency sip days.
-        // See open question in PR description.
+        // Background hydration wakeups improve freshness accuracy (the 30/60-min
+        // `HydrationMonitor` escalation per design.v3 §Stateful surfaces — see
+        // "Hydration freshness state machine" — depends on continuous-ish samples
+        // from the bottle) but consume BGAppRefreshTask budget more aggressively
+        // on high-frequency sip days. Kept ON by default for the service-layer PR;
+        // the throttling-vs-foreground-catchup vs Today-state-gated decision moves
+        // to the schedule-planner sub-task where the cost is measurable against the
+        // nightly notification re-registration budget.
         healthStore.enableBackgroundDelivery(for: Self.hydrationSampleType, frequency: .immediate) { _, _ in }
-        hydrationBackgroundDeliveryEnabled = true
+        // Treat this as requested, not confirmed: HK may reject asynchronously,
+        // and disableBackgroundDelivery is idempotent for non-enabled types.
+        hydrationBackgroundDeliveryRequested = true
     }
 
     public func stopHydrationObserver() {
@@ -243,10 +252,11 @@ public actor HealthKitService {
             healthStore.stop(existing)
             hydrationObserverQuery = nil
         }
+        hydrationObserverOnUpdate = nil
 
-        if hydrationBackgroundDeliveryEnabled {
+        if hydrationBackgroundDeliveryRequested {
             healthStore.disableBackgroundDelivery(for: Self.hydrationSampleType) { _, _ in }
-            hydrationBackgroundDeliveryEnabled = false
+            hydrationBackgroundDeliveryRequested = false
         }
     }
 
@@ -275,8 +285,12 @@ public actor HealthKitService {
         }
     }
 
-    private func handleObserverFired(notify onUpdate: @Sendable () -> Void) {
-        onUpdate()
+    func _testFireHydrationObserverCallback() {
+        handleObserverFired()
+    }
+
+    private func handleObserverFired() {
+        hydrationObserverOnUpdate?()
     }
 
     private static func makeHydrationSample(from sample: HKQuantitySample) -> HydrationSample {
