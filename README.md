@@ -87,6 +87,12 @@ The three runtime targets (app + both extensions) are enrolled in App Group `gro
 | Background Fetch + Processing | `BGProcessingTask` id: `com.act.coach.weekly-insight` |
 | Live Activities (`NSSupportsLiveActivities`) | ActivityKit via Live Activity extension |
 
+## Persistence layer
+
+Act. uses a local-first persistence split defined by `docs/design/design.v3.md` §Data model: all 15 user-domain entities are represented as CloudKit `CKRecord` types, and the app reads/writes through a GRDB SQLite mirror for fast on-device queries and offline-first writes. The SQLite file is shared across the app, WidgetKit extension, and Live Activity extension via the App Group container path `FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.act.coach")!.appendingPathComponent("act.sqlite")`, so every runtime surface sees the same data without cross-sandbox read failures.
+
+`LocalStore` opens the production SQLite via `DatabasePool` configured with `busyMode = .timeout(5.0)` and `PRAGMA journal_mode = WAL`, so the main app, widget, and Live Activity processes can all read/write the same file without contention failures. Public write APIs commit the GRDB transaction first, then propagate `CKRecord` deltas to CloudKit best-effort; a CloudKit failure does not roll back the local row, preserving the offline-first contract from `design.v3 §Data model:160`. Onboarding goes through `bootstrapProfile(_:)`, which atomically inserts the singleton `PROFILE` row and the day-0 `WITHDRAWAL_STATE` row in a single transaction and throws `LocalStoreError.profileAlreadyBootstrapped` on a second call.
+
 ## Running tests locally
 
 ```bash
