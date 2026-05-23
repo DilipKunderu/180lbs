@@ -61,17 +61,21 @@ protocol HealthStoreProtocol {
         frequency: HKUpdateFrequency,
         withCompletion completion: @escaping @Sendable (Bool, Error?) -> Void
     )
+    func disableBackgroundDelivery(
+        for type: HKObjectType,
+        withCompletion completion: @escaping @Sendable (Bool, Error?) -> Void
+    )
 }
 
 extension HKHealthStore: HealthStoreProtocol {}
 
-public enum HydrationSource: String, Equatable {
+public enum HydrationSource: String, Equatable, Sendable {
     case hidrateSpark = "hidrate_spark"
     case manualTap = "manual_tap"
     case manualTyped = "manual_typed"
 }
 
-public struct HydrationSample: Equatable {
+public struct HydrationSample: Equatable, Sendable {
     public let loggedAt: Date
     public let oz: Double
     public let source: HydrationSource
@@ -82,6 +86,12 @@ public struct HydrationSample: Equatable {
         self.source = source
     }
 }
+
+/// Volume-equality tolerance for hydration de-dup. HealthKit converts the
+/// bottle's published mL into fluid ounces internally; the round-trip may drift
+/// sub-ULP, so byte-exact equality would miss same-sip pairs. 0.01 oz is well
+/// below any real sip size, so it never merges actually-different sips.
+private let hydrationVolumeEqualityToleranceOz: Double = 0.01
 
 public func deduplicate(samples: [HydrationSample]) -> [HydrationSample] {
     let sorted = samples.sorted { lhs, rhs in
@@ -133,7 +143,7 @@ private func isManualTapBottleDuplicate(lhs: HydrationSample, rhs: HydrationSamp
         return false
     }
 
-    guard lhs.oz == rhs.oz else {
+    guard abs(lhs.oz - rhs.oz) < hydrationVolumeEqualityToleranceOz else {
         return false
     }
 
@@ -141,7 +151,19 @@ private func isManualTapBottleDuplicate(lhs: HydrationSample, rhs: HydrationSamp
     return distance <= 60
 }
 
-public final class HealthKitService {
+/// Owns the single `HKHealthStore` for the app and serializes all HealthKit
+/// query lifecycle calls through actor isolation so concurrent foreground +
+/// background callers (e.g. the `HydrationMonitor` background task and the
+/// foreground UI) cannot race on `hydrationObserverQuery`.
+///
+/// **Read-side privacy constraint (Apple).** `HKHealthStore.authorizationStatus(for:)`
+/// always returns `.notDetermined` for read types — apps cannot detect whether
+/// the user denied READ access. There is no `authorizationStatus(for: HealthKitReadType)`
+/// on this service for that reason. The canonical workaround is to observe
+/// data presence (via the anchored query / observer here) and treat absence as
+/// the de-facto read-denial signal at each `Cmd*` surface (see
+/// `docs/design/design.v3.md` §Integrations table).
+public actor HealthKitService {
     public enum MetadataKeys {
         public static let hydrationSource = "com.act.coach.hydrationSource"
         public static let manualTap = "manual_tap"
@@ -149,8 +171,20 @@ public final class HealthKitService {
 
     public static let hydrationSampleType = HKQuantityType(.dietaryWater)
 
+    /// Hidrate Inc. publishes the Spark PRO bottle's HealthKit samples under
+    /// `com.hidratenow.*` in current shipping builds; `com.hidrate.*` is kept
+    /// as a defensive fallback until the paired-bottle install confirms which
+    /// prefix actually arrives in production. TODO: after the first TestFlight
+    /// install, verify against Settings → Health → Data Access → Sources and
+    /// trim this allowlist down to the single observed prefix.
+    private static let hidrateBundlePrefixes: Set<String> = [
+        "com.hidratenow",
+        "com.hidrate"
+    ]
+
     private let healthStore: HealthStoreProtocol
     private var hydrationObserverQuery: HKObserverQuery?
+    private var hydrationBackgroundDeliveryEnabled = false
 
     public init() {
         self.healthStore = HKHealthStore()
@@ -175,23 +209,23 @@ public final class HealthKitService {
         }
     }
 
-    public func authorizationStatus(for type: HealthKitReadType) -> HKAuthorizationStatus {
-        healthStore.authorizationStatus(for: type.objectType)
-    }
-
+    /// Per-type WRITE authorization status. Write status is real; the caller
+    /// can use this to degrade write-dependent surfaces (e.g. CmdMeal's
+    /// "Logged + shake" HealthKit write). No read-side equivalent exists by
+    /// Apple privacy design — see the type-level doc comment.
     public func authorizationStatus(for type: HealthKitWriteType) -> HKAuthorizationStatus {
         healthStore.authorizationStatus(for: type.sampleType)
     }
 
-    public func startHydrationObserver(onUpdate: @escaping @Sendable () -> Void) {
-        if let hydrationObserverQuery {
-            healthStore.stop(hydrationObserverQuery)
+    public func startHydrationObserver(onUpdate: @Sendable @escaping () -> Void) {
+        if let existing = hydrationObserverQuery {
+            healthStore.stop(existing)
         }
 
-        let query = HKObserverQuery(sampleType: Self.hydrationSampleType, predicate: nil) { _, completion, error in
+        let query = HKObserverQuery(sampleType: Self.hydrationSampleType, predicate: nil) { [weak self] _, completion, error in
             defer { completion() }
             guard error == nil else { return }
-            onUpdate()
+            Task { await self?.handleObserverFired(notify: onUpdate) }
         }
 
         hydrationObserverQuery = query
@@ -199,17 +233,28 @@ public final class HealthKitService {
 
         // Background hydration wakeups improve freshness accuracy but consume
         // BGAppRefreshTask budget more aggressively on high-frequency sip days.
+        // See open question in PR description.
         healthStore.enableBackgroundDelivery(for: Self.hydrationSampleType, frequency: .immediate) { _, _ in }
+        hydrationBackgroundDeliveryEnabled = true
     }
 
     public func stopHydrationObserver() {
-        guard let hydrationObserverQuery else { return }
-        healthStore.stop(hydrationObserverQuery)
-        self.hydrationObserverQuery = nil
+        if let existing = hydrationObserverQuery {
+            healthStore.stop(existing)
+            hydrationObserverQuery = nil
+        }
+
+        if hydrationBackgroundDeliveryEnabled {
+            healthStore.disableBackgroundDelivery(for: Self.hydrationSampleType) { _, _ in }
+            hydrationBackgroundDeliveryEnabled = false
+        }
     }
 
-    public func fetchHydrationSamplesSince(anchor: HKQueryAnchor?) async throws -> (samples: [HKQuantitySample], newAnchor: HKQueryAnchor) {
-        try await withCheckedThrowingContinuation { continuation in
+    public func fetchHydrationSamplesSince(
+        anchor: HKQueryAnchor?
+    ) async throws -> (samples: [HydrationSample], newAnchor: HKQueryAnchor) {
+        typealias HydrationFetchResult = (samples: [HydrationSample], newAnchor: HKQueryAnchor)
+        return try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<HydrationFetchResult, Error>) in
             let query = HKAnchoredObjectQuery(
                 type: Self.hydrationSampleType,
                 predicate: nil,
@@ -222,29 +267,40 @@ public final class HealthKitService {
                 }
 
                 let hydrationSamples = (samples as? [HKQuantitySample]) ?? []
-                continuation.resume(returning: (hydrationSamples, newAnchor ?? HKQueryAnchor(fromValue: 0)))
+                let mapped = hydrationSamples.map(Self.makeHydrationSample(from:))
+                continuation.resume(returning: (mapped, newAnchor ?? HKQueryAnchor(fromValue: 0)))
             }
 
             healthStore.execute(query)
         }
     }
 
-    public static func makeHydrationSample(from sample: HKQuantitySample) -> HydrationSample {
-        HydrationSample(
+    private func handleObserverFired(notify onUpdate: @Sendable () -> Void) {
+        onUpdate()
+    }
+
+    private static func makeHydrationSample(from sample: HKQuantitySample) -> HydrationSample {
+        let metadataSourceTag = sample.metadata?[MetadataKeys.hydrationSource] as? String
+        return HydrationSample(
             loggedAt: sample.endDate,
             oz: sample.quantity.doubleValue(for: .fluidOunceUS()),
-            source: resolveHydrationSource(for: sample)
+            source: resolveSource(
+                fromBundleID: sample.sourceRevision.source.bundleIdentifier,
+                metadataSourceTag: metadataSourceTag
+            )
         )
     }
 
-    private static func resolveHydrationSource(for sample: HKQuantitySample) -> HydrationSource {
-        let bundleIdentifier = sample.sourceRevision.source.bundleIdentifier.lowercased()
-        if bundleIdentifier.hasPrefix("com.hidrate.") || bundleIdentifier == "com.hidrate" {
+    /// Pure source-resolution helper. Exposed at module scope (internal) so
+    /// tests can exercise the bundle-ID + metadata mapping rules without
+    /// constructing `HKSource` (which has no public initializer).
+    static func resolveSource(fromBundleID bundleID: String, metadataSourceTag: String?) -> HydrationSource {
+        let normalized = bundleID.lowercased()
+        for prefix in hidrateBundlePrefixes where normalized == prefix || normalized.hasPrefix(prefix + ".") {
             return .hidrateSpark
         }
 
-        if let explicitSource = sample.metadata?[MetadataKeys.hydrationSource] as? String,
-           explicitSource == MetadataKeys.manualTap {
+        if metadataSourceTag == MetadataKeys.manualTap {
             return .manualTap
         }
 

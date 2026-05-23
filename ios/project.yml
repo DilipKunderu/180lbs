@@ -58,7 +58,13 @@ targets:
         # Simulator builds skip the flag entirely and compile cleanly. No
         # `import FoundationModels` is needed at this stage; the linker reference
         # alone is what triggers the install-time gate declared in design.v3.md.
-        OTHER_LDFLAGS: "$(inherited) -framework HealthKit"
+        #
+        # HealthKit.framework is linked via the `dependencies:` block below
+        # (`sdk: HealthKit.framework`) so it ships on BOTH simulator and device
+        # archives. Linking it through OTHER_LDFLAGS here would be shadowed by
+        # the `[sdk=iphoneos*]`-conditional value, which replaces (not merges)
+        # the base on iphoneos builds — device archives would silently drop
+        # `-framework HealthKit` and fail at link time on TestFlight upload.
         "OTHER_LDFLAGS[sdk=iphoneos*]": "-framework FoundationModels"
     dependencies:
       - target: ActWidgets
@@ -66,6 +72,7 @@ targets:
       - target: ActLiveActivity
         embed: true
       - package: GRDB
+      - sdk: HealthKit.framework
 
   ActWidgets:
     type: app-extension
