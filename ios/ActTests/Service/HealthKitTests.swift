@@ -127,6 +127,28 @@ final class HealthKitTests: XCTestCase {
         XCTAssertEqual(deduped, [bottle])
     }
 
+    func test_deduplicate_keepsManualTypedInterleavedWithBottleAndManualTap() {
+        let bottle = HydrationSample(
+            loggedAt: date("2026-05-22T12:00:00Z"),
+            oz: 6.0,
+            source: .hidrateSpark
+        )
+        let manualTyped = HydrationSample(
+            loggedAt: date("2026-05-22T12:00:15Z"),
+            oz: 6.0,
+            source: .manualTyped
+        )
+        let manualTap = HydrationSample(
+            loggedAt: date("2026-05-22T12:00:30Z"),
+            oz: 6.0,
+            source: .manualTap
+        )
+
+        let deduped = deduplicate(samples: [bottle, manualTyped, manualTap])
+
+        XCTAssertEqual(deduped.sorted { $0.loggedAt < $1.loggedAt }, [bottle, manualTyped])
+    }
+
     // E4: Hidrate publishes under com.hidratenow.* in current shipping builds;
     // legacy com.hidrate.* is kept as a defensive fallback until TestFlight
     // confirms which prefix the paired bottle actually emits.
@@ -162,6 +184,16 @@ final class HealthKitTests: XCTestCase {
         XCTAssertEqual(healthStore.requestAuthorizationCallCount, 1)
     }
 
+    func test_authorizationStatus_writeType_passesThroughFromHealthStore() async {
+        let healthStore = MockHealthStore()
+        healthStore.writeStatuses[HealthKitWriteType.dietaryWater.sampleType.identifier] = .sharingAuthorized
+        let service = HealthKitService(healthStore: healthStore)
+
+        let status = await service.authorizationStatus(for: .dietaryWater)
+
+        XCTAssertEqual(status, .sharingAuthorized)
+    }
+
     // W7: stopping the hydration observer must also disable background delivery
     // so HK does not keep waking the app on bottle sips.
     func test_stopHydrationObserver_disablesBackgroundDelivery() async {
@@ -173,6 +205,17 @@ final class HealthKitTests: XCTestCase {
 
         XCTAssertEqual(healthStore.disableBackgroundDeliveryCallCount, 1)
         XCTAssertEqual(healthStore.stoppedQueryCount, 1)
+    }
+
+    func test_observer_callback_routesToActorOnUpdateHandler() async {
+        let healthStore = MockHealthStore()
+        let service = HealthKitService(healthStore: healthStore)
+        let counter = LockedCounter()
+
+        await service.startHydrationObserver(onUpdate: { counter.increment() })
+        await service._testFireHydrationObserverCallback()
+
+        XCTAssertEqual(counter.count, 1)
     }
 
     private func date(_ value: String) -> Date {
@@ -190,6 +233,7 @@ private final class MockHealthStore: HealthStoreProtocol, @unchecked Sendable {
     private let lock = NSLock()
     private var _requestAuthorizationSuccess = true
     private var _requestAuthorizationError: Error?
+    private var _writeStatuses: [String: HKAuthorizationStatus] = [:]
     private var _requestAuthorizationCallCount = 0
     private var _executedQueryCount = 0
     private var _stoppedQueryCount = 0
@@ -204,6 +248,11 @@ private final class MockHealthStore: HealthStoreProtocol, @unchecked Sendable {
     var requestAuthorizationError: Error? {
         get { lock.withLock { _requestAuthorizationError } }
         set { lock.withLock { _requestAuthorizationError = newValue } }
+    }
+
+    var writeStatuses: [String: HKAuthorizationStatus] {
+        get { lock.withLock { _writeStatuses } }
+        set { lock.withLock { _writeStatuses = newValue } }
     }
 
     var requestAuthorizationCallCount: Int { lock.withLock { _requestAuthorizationCallCount } }
@@ -225,7 +274,7 @@ private final class MockHealthStore: HealthStoreProtocol, @unchecked Sendable {
     }
 
     func authorizationStatus(for type: HKObjectType) -> HKAuthorizationStatus {
-        .notDetermined
+        lock.withLock { _writeStatuses[type.identifier] ?? .notDetermined }
     }
 
     func execute(_ query: HKQuery) {
@@ -251,5 +300,18 @@ private final class MockHealthStore: HealthStoreProtocol, @unchecked Sendable {
     ) {
         lock.withLock { _disableBackgroundDeliveryCallCount += 1 }
         completion(true, nil)
+    }
+}
+
+private final class LockedCounter: @unchecked Sendable {
+    private let lock = NSLock()
+    private var _count = 0
+
+    var count: Int {
+        lock.withLock { _count }
+    }
+
+    func increment() {
+        lock.withLock { _count += 1 }
     }
 }
