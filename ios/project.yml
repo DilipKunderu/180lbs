@@ -58,6 +58,7 @@ targets:
         # Simulator builds skip the flag entirely and compile cleanly. No
         # `import FoundationModels` is needed at this stage; the linker reference
         # alone is what triggers the install-time gate declared in design.v3.md.
+        OTHER_LDFLAGS: "$(inherited) -framework HealthKit"
         "OTHER_LDFLAGS[sdk=iphoneos*]": "-framework FoundationModels"
     dependencies:
       - target: ActWidgets
