@@ -87,6 +87,10 @@ The three runtime targets (app + both extensions) are enrolled in App Group `gro
 | Background Fetch + Processing | `BGProcessingTask` id: `com.act.coach.weekly-insight` |
 | Live Activities (`NSSupportsLiveActivities`) | ActivityKit via Live Activity extension |
 
+## HealthKit integration
+
+`HealthKitService` is the only production path that touches `HKHealthStore`, requesting read access for body mass, step count, sleep analysis, resting heart rate, heart rate variability (SDNN), VO2 max, and dietary water, plus write access for workouts, dietary energy consumed, and dietary water. Hydration updates stream through an observer + anchored query pair, and de-dup follows the binding contract in `docs/design/design.v3.md` §Failure modes: manual tap entries within 60 seconds of a same-volume Hidrate sample are treated as the same sip when computing daily running totals.
+
 ## Persistence layer
 
 Act. uses a local-first persistence split defined by `docs/design/design.v3.md` §Data model: all 15 user-domain entities are represented as CloudKit `CKRecord` types, and the app reads/writes through a GRDB SQLite mirror for fast on-device queries and offline-first writes. The SQLite file is shared across the app, WidgetKit extension, and Live Activity extension via the App Group container path `FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.act.coach")!.appendingPathComponent("act.sqlite")`, so every runtime surface sees the same data without cross-sandbox read failures.
