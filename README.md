@@ -116,7 +116,23 @@ Snapshot tests compare rendered SwiftUI views against committed PNGs in
 `ios/ActTests/__snapshots__/`. CI sets `SNAPSHOT_TESTING_RECORD=never` so a
 missing reference is a hard failure.
 
-**First run / update workflow:**
+References must match the renderer that verifies them. CI verifies on
+**Xcode 16.4 / iOS 18.1**; recording on a different local toolchain (e.g.
+Xcode 26 / iOS 26) can yield font/metric drift and perpetual CI diffs. Prefer
+recording on CI's renderer via the **CI record path** below; use the local
+workflow only when your local simulator runtime matches CI.
+
+**CI record path (recommended — matches CI's renderer exactly):**
+
+1. Push your feature branch (with the new snapshot test added).
+2. Actions tab → **CI** workflow → **Run workflow** → set `record_snapshots = true`
+   on your branch. The run records references on CI's iOS 18.1 simulator and is
+   allowed to "fail" the snapshot assertions.
+3. Download the `snapshots-<run_id>` artifact, copy the PNGs into
+   `ios/ActTests/__snapshots__/`, commit, and push. The next normal run verifies
+   them green.
+
+**Local record path (only if your local sim runtime matches CI):**
 
 ```bash
 cd ios
