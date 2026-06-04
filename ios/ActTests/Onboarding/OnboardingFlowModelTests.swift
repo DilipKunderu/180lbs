@@ -61,6 +61,23 @@ final class OnboardingFlowModelTests: XCTestCase {
         model.advance()
 
         XCTAssertEqual(completionCount, 1)
+    }
+
+    func test_advance_atGrocery_doesNotAdvanceStep() {
+        let model = OnboardingFlowModel(step: .grocery)
+        model.onComplete = {}
+
+        model.advance()
+
+        XCTAssertEqual(model.step, .grocery)
+    }
+
+    func test_advance_atGrocery_withNilOnComplete_doesNotCrash() {
+        let model = OnboardingFlowModel(step: .grocery)
+        model.onComplete = nil
+
+        model.advance()
+
         XCTAssertEqual(model.step, .grocery)
     }
 }
