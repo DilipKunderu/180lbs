@@ -28,5 +28,5 @@ final class OnboardingFlowModel {
 
     var showsBackLink: Bool { step != .welcome }
 
-    var isLast: Bool { step == .grocery }
+    var isLast: Bool { step == OnboardingStep.allCases.last }
 }

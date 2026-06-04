@@ -9,7 +9,12 @@ final class OnboardingFlowModelTests: XCTestCase {
     }
 
     func test_advance_walksStepsInJSXOrder() {
-        let expectedSteps = OnboardingStep.allCases
+        // Explicit oracle (not OnboardingStep.allCases) so an enum reorder that
+        // drifts from the canonical JSX flow is caught here, not silently passed.
+        let expectedSteps: [OnboardingStep] = [
+            .welcome, .profile, .health, .notifications, .scale,
+            .hydration, .quit, .rotation, .grocery
+        ]
         let model = OnboardingFlowModel()
         var visitedSteps = [model.step]
 
