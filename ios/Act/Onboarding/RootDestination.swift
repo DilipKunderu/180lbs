@@ -4,6 +4,9 @@ enum RootDestination: Equatable {
     case today
 
     static func resolve(profile: Profile?, readFailed: Bool) -> RootDestination {
-        readFailed ? .onboarding : .loading
+        if readFailed {
+            return .loading
+        }
+        return profile == nil ? .onboarding : .today
     }
 }

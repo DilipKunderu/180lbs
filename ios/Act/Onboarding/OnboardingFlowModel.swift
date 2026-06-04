@@ -4,7 +4,7 @@ final class OnboardingFlowModel {
     var onComplete: (() -> Void)?
 
     init(
-        step: OnboardingStep = .profile,
+        step: OnboardingStep = .welcome,
         draftBuilder: ProfileDraftBuilder = ProfileDraftBuilder()
     ) {
         self.step = step
@@ -12,14 +12,21 @@ final class OnboardingFlowModel {
     }
 
     func advance() {
-        step = .welcome
+        guard let next = OnboardingStep(rawValue: step.rawValue + 1) else {
+            onComplete?()
+            return
+        }
+        step = next
     }
 
     func back() {
-        step = .grocery
+        guard let previous = OnboardingStep(rawValue: step.rawValue - 1) else {
+            return
+        }
+        step = previous
     }
 
-    var showsBackLink: Bool { false }
+    var showsBackLink: Bool { step != .welcome }
 
-    var isLast: Bool { false }
+    var isLast: Bool { step == .grocery }
 }
