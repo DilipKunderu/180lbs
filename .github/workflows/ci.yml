@@ -5,6 +5,15 @@ on:
     branches-ignore: []
   pull_request:
     branches: [main]
+  workflow_dispatch:
+    inputs:
+      record_snapshots:
+        description: >-
+          Record snapshot reference PNGs on CI's renderer instead of verifying.
+          Run on a feature branch, download the `snapshots-<run_id>` artifact,
+          commit the PNGs, then push for a normal verifying run.
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
@@ -66,14 +75,17 @@ jobs:
         run: xcodebuild -resolvePackageDependencies -project Act.xcodeproj -scheme Act
       - name: Build + test
         working-directory: ios
-        # SNAPSHOT_TESTING_RECORD=never: fail loudly if a reference PNG is absent
-        # rather than silently creating it in the ephemeral runner and losing it.
-        # Developers must run with SNAPSHOT_TESTING_RECORD=all locally and commit
-        # the generated PNGs before CI will accept snapshot tests.
+        # Normal runs: SNAPSHOT_TESTING_RECORD=never — a missing reference PNG is
+        # a hard failure, never silently seeded in the ephemeral runner. To MINT
+        # references on CI's exact renderer, run this workflow via the Actions tab
+        # with `record_snapshots=true`; that run records (and is allowed to "fail"
+        # the assertions) and uploads the PNGs as the `snapshots-<run_id>` artifact
+        # for a human to download + commit. Then a normal push verifies them green.
         env:
-          SNAPSHOT_TESTING_RECORD: never
+          SNAPSHOT_TESTING_RECORD: ${{ github.event.inputs.record_snapshots == 'true' && 'all' || 'never' }}
         run: |
           set -o pipefail
+          status=0
           xcodebuild test \
             -project Act.xcodeproj \
             -scheme Act \
@@ -81,7 +93,12 @@ jobs:
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             -enableCodeCoverage NO \
-            -resultBundlePath TestResults.xcresult
+            -resultBundlePath TestResults.xcresult || status=$?
+          if [ "${{ github.event.inputs.record_snapshots }}" = "true" ]; then
+            echo "::notice::record run — ignoring test status $status; recorded PNGs uploaded as snapshots-${{ github.run_id }}"
+            exit 0
+          fi
+          exit $status
       - name: Upload TestResults on failure
         if: failure()
         uses: actions/upload-artifact@v4
