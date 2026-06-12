@@ -31,7 +31,7 @@ jobs:
     timeout-minutes: 5
     steps:
       - name: Checkout (full history for immutability diff)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Fetch origin/main if remote exists
@@ -54,7 +54,7 @@ jobs:
       # before). Keep .githooks/pre-push guidance in sync when bumping.
       SWIFTLINT_VERSION: 0.63.3
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install SwiftLint (pinned, static Linux binary)
         run: |
           curl -fsSL -o swiftlint.zip \
@@ -85,7 +85,7 @@ jobs:
     runs-on: macos-15
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Cache Swift packages
         uses: actions/cache@v4
         with:
