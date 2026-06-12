@@ -19,9 +19,14 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Same-repo PRs are skipped at the job level: the push event on the head branch
+# already runs the full pipeline, and GitHub attaches those check runs to the PR
+# by head SHA. The pull_request trigger is kept solely for fork PRs.
+
 jobs:
   design-doc-check:
     name: design-doc-check
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -41,21 +46,56 @@ jobs:
 
   swift-lint:
     name: swift-lint
-    runs-on: macos-15
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      # Pinned so lint results are reproducible (brew installed latest-at-runtime
+      # before). Keep .githooks/pre-push guidance in sync when bumping.
+      SWIFTLINT_VERSION: 0.63.3
     steps:
       - uses: actions/checkout@v4
-      - name: Install SwiftLint
-        run: brew install swiftlint
+      - name: Install SwiftLint (pinned, static Linux binary)
+        run: |
+          curl -fsSL -o swiftlint.zip \
+            "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/swiftlint_linux_amd64.zip"
+          mkdir -p "$HOME/.local/bin"
+          unzip -o swiftlint.zip swiftlint -d "$HOME/.local/bin"
+          chmod +x "$HOME/.local/bin/swiftlint"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Sanity-check custom hex-color rule fires on Linux
+        # The no_random_hex_color rule uses match_kinds (SourceKit-dependent).
+        # Prove it still fires on the static Linux build so a silently dead rule
+        # can never pass CI looking green.
+        run: |
+          echo 'let probe = "#FF00AA"' > ios/CIHexRuleProbeDeleteMe.swift
+          if swiftlint lint --quiet --reporter json ios/ | grep -q 'no_random_hex_color'; then
+            echo "custom rule fired as expected"
+          else
+            echo "::error::no_random_hex_color custom rule did not fire on the Linux SwiftLint build"
+            exit 1
+          fi
+          rm ios/CIHexRuleProbeDeleteMe.swift
       - name: Run SwiftLint
         run: swiftlint lint --strict --reporter github-actions-logging ios/
 
   xcode-test:
     name: xcode-test
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: macos-15
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: ios/SourcePackages
+          # No committed Package.resolved (the xcodeproj is generated), so key on
+          # project.yml, where package pins live. restore-keys lets a stale cache
+          # still seed most checkouts after a dependency bump.
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/project.yml') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate Xcode project
@@ -72,7 +112,11 @@ jobs:
           xcrun simctl list runtimes | grep "iOS 18" || true
       - name: Resolve Swift packages
         working-directory: ios
-        run: xcodebuild -resolvePackageDependencies -project Act.xcodeproj -scheme Act
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project Act.xcodeproj \
+            -scheme Act \
+            -clonedSourcePackagesDirPath SourcePackages
       - name: Build + test
         working-directory: ios
         # Normal runs: SNAPSHOT_TESTING_RECORD=never — a missing reference PNG is
@@ -90,6 +134,7 @@ jobs:
             -project Act.xcodeproj \
             -scheme Act \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \
+            -clonedSourcePackagesDirPath SourcePackages \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             -enableCodeCoverage NO \

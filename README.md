@@ -162,7 +162,7 @@ xcodebuild test \
 
 ## TestFlight / CI/CD
 
-- **CI**: GitHub Actions (`.github/workflows/ci.yml`) — `design-doc-check`, `swift-lint`, `xcode-test` run on every push/PR.
+- **CI**: GitHub Actions (`.github/workflows/ci.yml`) — `design-doc-check`, `swift-lint`, `xcode-test` run on every branch push (and on fork PRs; same-repo PRs reuse the push run's checks, attached by head SHA). SwiftLint is version-pinned (`SWIFTLINT_VERSION` in `ci.yml`) on Ubuntu; Swift packages are cached via `ios/SourcePackages`.
 - **Deploy**: `.github/workflows/deploy.yml` — triggered on version tag push, uploads to TestFlight via Fastlane `:beta` lane (requires `APP_STORE_CONNECT_API_KEY_*` secrets).
 
 ## Design
