@@ -114,7 +114,20 @@ class SnapshotTestCase: XCTestCase {
     /// When the test skips, this helper emits an `XCTAttachment` named
     /// `"BOOTSTRAP-SKIP-<token>"` with a human-readable warning so the skip
     /// is visible in test logs and `.xcresult` bundles — not silent.
-    func XCTBootstrapSkipIfReferenceMissing(named token: String) throws {
+    ///
+    /// In record mode (`SNAPSHOT_TESTING_RECORD=all` or `missing`) the helper
+    /// never skips: skipping there would prevent `assertViewSnapshot` from
+    /// writing the reference this helper is waiting for — the record run would
+    /// silently produce nothing (the bug that motivated `environment:` being
+    /// injectable; see `SnapshotBootstrapSkipTests`).
+    func XCTBootstrapSkipIfReferenceMissing(
+        named token: String,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) throws {
+        let recordMode = environment["SNAPSHOT_TESTING_RECORD"]
+        if recordMode == "all" || recordMode == "missing" {
+            return
+        }
         let files = (try? FileManager.default.contentsOfDirectory(atPath: Self.snapshotDirectory)) ?? []
         let hasMatch = files.contains { $0.hasSuffix(".png") && $0.contains(token) }
         guard hasMatch else {

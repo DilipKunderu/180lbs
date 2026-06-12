@@ -162,5 +162,8 @@ jobs:
         with:
           name: snapshots-${{ github.run_id }}
           path: ios/ActTests/__snapshots__/
-          if-no-files-found: ignore
+          # warn (not ignore): upload-artifact skips hidden files, so a
+          # __snapshots__/ holding only .gitkeep counts as "no files". A record
+          # run that produced no PNGs should be visible, not silent.
+          if-no-files-found: warn
           retention-days: 14
