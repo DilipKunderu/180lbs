@@ -140,8 +140,6 @@ jobs:
             -scheme Act \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
             -clonedSourcePackagesDirPath SourcePackages \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
             -enableCodeCoverage NO \
             -resultBundlePath TestResults.xcresult || status=$?
           if [ "${{ github.event.inputs.record_snapshots }}" = "true" ]; then

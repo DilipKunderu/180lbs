@@ -114,9 +114,27 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.act.coach.Tests
+        GENERATE_INFOPLIST_FILE: "YES"
     dependencies:
       - target: Act
       - package: SnapshotTesting
+
+  # On-simulator integration: boots the real app, walks onboarding end to
+  # end against the real LocalStore, and attaches per-step screenshots
+  # (PR evidence — see scripts/export-ui-test-screenshots.sh).
+  ActUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: ActUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.act.coach.UITests
+        TEST_TARGET_NAME: Act
+        GENERATE_INFOPLIST_FILE: "YES"
+    dependencies:
+      - target: Act
 
 schemes:
   Act:
@@ -126,12 +144,14 @@ schemes:
         ActWidgets: all
         ActLiveActivity: all
         ActTests: [test]
+        ActUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
         - ActTests
+        - ActUITests
     profile:
       config: Release
     archive:

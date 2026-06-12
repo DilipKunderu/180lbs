@@ -23,10 +23,26 @@ final class LocalStore {
     private let nowProvider: () -> Date
     private let dayZeroWriter: DayZeroWriter
 
-    init(cloudDatabase: CloudDatabase? = nil) throws {
-        guard let url = FileManager.default
+    /// Production SQLite location in the shared App Group container; nil when
+    /// the container is unavailable (e.g. missing entitlement).
+    static func productionDatabaseURL() -> URL? {
+        FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: "group.com.act.coach")?
-            .appendingPathComponent("act.sqlite") else {
+            .appendingPathComponent("act.sqlite")
+    }
+
+    /// Deletes the production database (plus WAL/SHM sidecars), returning the
+    /// app to a fresh-install state. Used only by the `-ActResetLocalStore`
+    /// debug launch argument so UI tests can walk onboarding repeatably.
+    static func removeProductionDatabase() {
+        guard let url = productionDatabaseURL() else { return }
+        for suffix in ["", "-wal", "-shm"] {
+            try? FileManager.default.removeItem(atPath: url.path + suffix)
+        }
+    }
+
+    init(cloudDatabase: CloudDatabase? = nil) throws {
+        guard let url = LocalStore.productionDatabaseURL() else {
             throw CocoaError(.fileNoSuchFile)
         }
         self.databaseWriter = try LocalStore.openProductionPool(atPath: url.path)

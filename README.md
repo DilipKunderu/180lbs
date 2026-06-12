@@ -108,9 +108,7 @@ xcodegen generate
 xcodebuild test \
   -project Act.xcodeproj \
   -scheme Act \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
-  CODE_SIGNING_ALLOWED=NO \
-  CODE_SIGNING_REQUIRED=NO
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5'
 ```
 
 ### Snapshot tests — recording reference images
@@ -147,9 +145,7 @@ xcodegen generate
 TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all xcodebuild test \
   -project Act.xcodeproj \
   -scheme Act \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
-  CODE_SIGNING_ALLOWED=NO \
-  CODE_SIGNING_REQUIRED=NO
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5'
 # tests will "fail" with "Record mode is on" — that is expected
 git add ios/ActTests/__snapshots__/
 git commit -m "chore(snapshots): record reference PNGs for <feature>"
@@ -157,9 +153,7 @@ git commit -m "chore(snapshots): record reference PNGs for <feature>"
 xcodebuild test \
   -project Act.xcodeproj \
   -scheme Act \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
-  CODE_SIGNING_ALLOWED=NO \
-  CODE_SIGNING_REQUIRED=NO
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5'
 ```
 
 > **Device consistency:** Reference PNGs render at `ViewImageConfig.iPhone13Pro`

@@ -23,8 +23,7 @@ import XCTest
 /// xcodegen generate
 /// TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all xcodebuild test \
 ///   -project Act.xcodeproj -scheme Act \
-///   -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
-///   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+///   -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5'
 /// ```
 ///
 /// CI explicitly sets `SNAPSHOT_TESTING_RECORD=never` so a missing reference
