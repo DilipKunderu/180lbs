@@ -26,7 +26,10 @@ final class ContentViewSnapshotTests: SnapshotTestCase {
     func test_contentView_renders_dark_iphone13pro() throws {
         // BOOTSTRAP-ONLY: see SnapshotTestCase.XCTBootstrapSkipIfReferenceMissing
         // doc-comment. Real feature snapshot tests must NOT call this.
-        try XCTBootstrapSkipIfReferenceMissing(named: "ContentView")
+        // Token matches the recorded filename
+        // (test_contentView_renders_dark_iphone13pro.1.png) — matching is
+        // case-sensitive, so "ContentView" would never match.
+        try XCTBootstrapSkipIfReferenceMissing(named: "contentView")
         assertViewSnapshot(ContentView())
     }
 }
