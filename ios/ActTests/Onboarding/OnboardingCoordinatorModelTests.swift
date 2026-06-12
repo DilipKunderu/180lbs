@@ -6,13 +6,15 @@ final class OnboardingCoordinatorModelTests: XCTestCase {
     private func makeModel(
         store: FakeOnboardingProfileStore = FakeOnboardingProfileStore(),
         startingAt step: OnboardingStep = .welcome,
-        now: Date = Date(timeIntervalSince1970: 0)
+        now: Date = Date(timeIntervalSince1970: 0),
+        authorizer: (any HealthAuthorizationRequesting)? = nil
     ) -> OnboardingCoordinatorModel {
         OnboardingCoordinatorModel(
             store: store,
             flowModel: OnboardingFlowModel(step: step),
             nowProvider: { now },
-            timeZone: TimeZone(identifier: "UTC") ?? .current
+            timeZone: TimeZone(identifier: "UTC") ?? .current,
+            healthAuthorizer: authorizer
         )
     }
 
@@ -92,5 +94,84 @@ final class OnboardingCoordinatorModelTests: XCTestCase {
 
         XCTAssertTrue(model.bootstrapFailed)
         XCTAssertNil(finished)
+    }
+
+    // MARK: - HealthKit authorization seam
+
+    /// Advancing off `.health` must (a) move the step forward immediately
+    /// (synchronously, before any async auth work) and (b) fire exactly one
+    /// `requestAuthorization()` call through the injected seam.
+    /// Awaiting `healthAuthorizationTask` drains the async work so the count
+    /// assertion is deterministic even in a fast-executor environment.
+    func test_advanceFromHealth_advancesImmediately_andRequestsHealthAuthorizationOnce() async {
+        let spy = SpyHealthAuthorizer()
+        let model = makeModel(startingAt: .health, authorizer: spy)
+
+        model.advance()
+
+        // Step advances synchronously — no await needed.
+        XCTAssertEqual(model.step, .notifications)
+        // Task handle must be retained immediately (before the async work completes).
+        XCTAssertNotNil(model.healthAuthorizationTask,
+                        "expected a retained task handle after advancing from .health")
+
+        // Drain the fire-and-forget task before checking the call count.
+        await model.healthAuthorizationTask?.value
+
+        XCTAssertEqual(spy.requestCount, 1)
+    }
+
+    /// If the authorizer throws, the flow must still have advanced and the
+    /// error must be swallowed (no `bootstrapFailed` flag, no crash).
+    func test_advanceFromHealth_whenAuthorizationThrows_stillAdvances() async {
+        let spy = SpyHealthAuthorizer()
+        spy.thrownError = NSError(domain: "test", code: 1)
+        let model = makeModel(startingAt: .health, authorizer: spy)
+
+        model.advance()
+
+        XCTAssertEqual(model.step, .notifications)
+        // Task handle must be retained even when the authorizer will throw.
+        XCTAssertNotNil(model.healthAuthorizationTask,
+                        "expected a retained task handle after advancing from .health")
+
+        await model.healthAuthorizationTask?.value
+
+        XCTAssertEqual(spy.requestCount, 1)
+        XCTAssertFalse(model.bootstrapFailed)
+    }
+
+    /// When no authorizer is injected (`nil` = the `-ActSkipHealthKitAuthorization` /
+    /// no-op path), advancing from `.health` must not crash and must leave
+    /// `healthAuthorizationTask` as `nil` (nothing to wait on).
+    func test_advanceFromHealth_withNilAuthorizer_doesNotCrashAndLeavesTaskNil() {
+        let model = makeModel(startingAt: .health, authorizer: nil)
+
+        model.advance()
+
+        XCTAssertEqual(model.step, .notifications)
+        XCTAssertNil(model.healthAuthorizationTask,
+                     "expected no task when authorizer is nil")
+    }
+
+    /// No step other than `.health` must trigger a health-authorization request.
+    /// The task handle must remain `nil` for every other transition.
+    func test_advanceFromOtherSteps_doesNotRequestHealthAuthorization() async {
+        // `.grocery` is intentionally included: FakeOnboardingProfileStore bootstraps
+        // successfully by default, so advancing from .grocery completes onboarding without
+        // crashing, giving us a valid signal that no auth task is spawned there either.
+        let nonHealthSteps = OnboardingStep.allCases.filter { $0 != .health }
+        for step in nonHealthSteps {
+            let spy = SpyHealthAuthorizer()
+            let model = makeModel(startingAt: step, authorizer: spy)
+
+            model.advance()
+
+            // No task should be spawned.
+            XCTAssertNil(model.healthAuthorizationTask,
+                         "expected no auth task when advancing from .\(step)")
+            XCTAssertEqual(spy.requestCount, 0,
+                           "expected zero auth requests when advancing from .\(step)")
+        }
     }
 }
