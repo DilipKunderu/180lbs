@@ -15,7 +15,7 @@ import XCTest
 /// prefix is mandatory: xcodebuild forwards only `TEST_RUNNER_`-prefixed
 /// variables into the simulator test process (stripping the prefix); a bare
 /// `SNAPSHOT_TESTING_RECORD=all` never reaches the tests. CI runs the same
-/// simulator (`iPhone 16 Pro` on `macos-15` with iOS 18.1) so reference
+/// simulator (`iPhone 17 Pro` on `macos-26` with iOS 26.5) so reference
 /// images recorded locally match CI byte-for-byte.
 ///
 /// ```bash
@@ -23,8 +23,7 @@ import XCTest
 /// xcodegen generate
 /// TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all xcodebuild test \
 ///   -project Act.xcodeproj -scheme Act \
-///   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \
-///   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+///   -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5'
 /// ```
 ///
 /// CI explicitly sets `SNAPSHOT_TESTING_RECORD=never` so a missing reference
@@ -53,7 +52,7 @@ class SnapshotTestCase: XCTestCase {
     ///
     /// `ViewImageConfig.iPhone13Pro` fixes the layout dimensions independent of
     /// the host simulator device, so renders are deterministic across local /
-    /// CI as long as the simulator OS matches (iOS 18.1).
+    /// CI as long as the simulator OS matches (iOS 26.5).
     ///
     /// ## Why `verifySnapshot` and not `assertSnapshot`?
     /// `assertSnapshot` (≥ 1.17) no longer accepts a `snapshotDirectory:`

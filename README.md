@@ -7,7 +7,7 @@ Single-user iOS coach — dark-mode only, Apple-native stack, TestFlight-only.
 | Tool | Version |
 |------|---------|
 | Xcode | 16.2+ |
-| iOS deployment target | 18.1 (hard floor) |
+| iOS deployment target | 26.0 — always tracks the latest iOS |
 | Device | A17 Pro or M-series (Apple Intelligence requirement) |
 | Ruby | 3.x (for Fastlane) |
 | XcodeGen | 2.x (`brew install xcodegen`) |
@@ -108,9 +108,7 @@ xcodegen generate
 xcodebuild test \
   -project Act.xcodeproj \
   -scheme Act \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \
-  CODE_SIGNING_ALLOWED=NO \
-  CODE_SIGNING_REQUIRED=NO
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5'
 ```
 
 ### Snapshot tests — recording reference images
@@ -122,7 +120,7 @@ the simulator test process when they carry the `TEST_RUNNER_` prefix, which it
 strips) so a missing reference is a hard failure.
 
 References must match the renderer that verifies them. CI verifies on
-**Xcode 16.4 / iOS 18.1**; recording on a different local toolchain (e.g.
+**Xcode 26.5 / iOS 26.5**; recording on a different local toolchain (e.g.
 Xcode 26 / iOS 26) can yield font/metric drift and perpetual CI diffs. Prefer
 recording on CI's renderer via the **CI record path** below; use the local
 workflow only when your local simulator runtime matches CI.
@@ -131,7 +129,7 @@ workflow only when your local simulator runtime matches CI.
 
 1. Push your feature branch (with the new snapshot test added).
 2. Actions tab → **CI** workflow → **Run workflow** → set `record_snapshots = true`
-   on your branch. The run records references on CI's iOS 18.1 simulator and is
+   on your branch. The run records references on CI's iOS 26.5 simulator and is
    allowed to "fail" the snapshot assertions.
 3. Download the `snapshots-<run_id>` artifact, copy the PNGs into
    `ios/ActTests/__snapshots__/`, commit, and push. The next normal run verifies
@@ -147,9 +145,7 @@ xcodegen generate
 TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all xcodebuild test \
   -project Act.xcodeproj \
   -scheme Act \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \
-  CODE_SIGNING_ALLOWED=NO \
-  CODE_SIGNING_REQUIRED=NO
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5'
 # tests will "fail" with "Record mode is on" — that is expected
 git add ios/ActTests/__snapshots__/
 git commit -m "chore(snapshots): record reference PNGs for <feature>"
@@ -157,14 +153,12 @@ git commit -m "chore(snapshots): record reference PNGs for <feature>"
 xcodebuild test \
   -project Act.xcodeproj \
   -scheme Act \
-  -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \
-  CODE_SIGNING_ALLOWED=NO \
-  CODE_SIGNING_REQUIRED=NO
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5'
 ```
 
 > **Device consistency:** Reference PNGs render at `ViewImageConfig.iPhone13Pro`
 > layout dimensions (deterministic across simulators), but always pass the
-> same `-destination` simulator that CI uses (`iPhone 16 Pro`, iOS 18.1) so
+> same `-destination` simulator that CI uses (`iPhone 17 Pro`, iOS 26.5) so
 > that font hinting and text layout match CI byte-for-byte.
 
 ## TestFlight / CI/CD

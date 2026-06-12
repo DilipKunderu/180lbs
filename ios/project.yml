@@ -11,7 +11,7 @@ packages:
 options:
   bundleIdPrefix: com.act.coach
   deploymentTarget:
-    iOS: "18.1"
+    iOS: "26.0"
   xcodeVersion: "16.2"
   groupSortPosition: none
   createIntermediateGroups: true
@@ -20,7 +20,7 @@ options:
 settings:
   base:
     SWIFT_VERSION: "5.0"
-    IPHONEOS_DEPLOYMENT_TARGET: "18.1"
+    IPHONEOS_DEPLOYMENT_TARGET: "26.0"
     TARGETED_DEVICE_FAMILY: "1"
     ENABLE_BITCODE: "NO"
     DEBUG_INFORMATION_FORMAT: dwarf-with-dsym
@@ -34,7 +34,7 @@ targets:
   Act:
     type: application
     platform: iOS
-    deploymentTarget: "18.1"
+    deploymentTarget: "26.0"
     sources:
       - path: Act
         excludes:
@@ -47,7 +47,8 @@ targets:
         # FoundationModels is Apple Intelligence's on-device LLM framework and is
         # available only on A17 Pro / M-series hardware. The framework ships in the
         # iPhoneOS SDK (device archives) but NOT in the iPhoneSimulator SDK in the
-        # current Xcode toolchain (16.4 → iPhoneSimulator18.5.sdk on CI runners),
+        # toolchain where this was pinned (Xcode 16.4 → iPhoneSimulator18.5.sdk); kept
+        # under Xcode 26.x until simulator-SDK availability is verified,
         # so an unconditional link breaks simulator builds.
         #
         # The SDK-conditional OTHER_LDFLAGS below adds the linker reference only
@@ -77,7 +78,7 @@ targets:
   ActWidgets:
     type: app-extension
     platform: iOS
-    deploymentTarget: "18.1"
+    deploymentTarget: "26.0"
     sources:
       - path: ActWidgets
         excludes:
@@ -92,7 +93,7 @@ targets:
   ActLiveActivity:
     type: app-extension
     platform: iOS
-    deploymentTarget: "18.1"
+    deploymentTarget: "26.0"
     sources:
       - path: ActLiveActivity
         excludes:
@@ -107,15 +108,33 @@ targets:
   ActTests:
     type: bundle.unit-test
     platform: iOS
-    deploymentTarget: "18.1"
+    deploymentTarget: "26.0"
     sources:
       - path: ActTests
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.act.coach.Tests
+        GENERATE_INFOPLIST_FILE: "YES"
     dependencies:
       - target: Act
       - package: SnapshotTesting
+
+  # On-simulator integration: boots the real app, walks onboarding end to
+  # end against the real LocalStore, and attaches per-step screenshots
+  # (PR evidence — see scripts/export-ui-test-screenshots.sh).
+  ActUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    deploymentTarget: "26.0"
+    sources:
+      - path: ActUITests
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.act.coach.UITests
+        TEST_TARGET_NAME: Act
+        GENERATE_INFOPLIST_FILE: "YES"
+    dependencies:
+      - target: Act
 
 schemes:
   Act:
@@ -125,12 +144,14 @@ schemes:
         ActWidgets: all
         ActLiveActivity: all
         ActTests: [test]
+        ActUITests: [test]
     run:
       config: Debug
     test:
       config: Debug
       targets:
         - ActTests
+        - ActUITests
     profile:
       config: Release
     archive:
