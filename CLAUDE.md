@@ -21,8 +21,7 @@ cd ios
 xcodebuild test \
   -project Act.xcodeproj \
   -scheme Act \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
-  CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5'
 ```
 
 Run a single test class or method: add `-only-testing:ActTests/OnboardingFlowModelTests` (or `.../OnboardingFlowModelTests/testName`) to the command above.
@@ -43,7 +42,7 @@ Optional fast pre-push lint gate: `git config core.hooksPath .githooks`.
 
 ### Snapshot tests
 
-Snapshot tests compare SwiftUI renders against committed PNGs in `ios/ActTests/__snapshots__/`. CI sets `SNAPSHOT_TESTING_RECORD=never` (passed as `TEST_RUNNER_SNAPSHOT_TESTING_RECORD` — xcodebuild only forwards `TEST_RUNNER_`-prefixed env vars into the simulator test process, stripping the prefix), so a missing reference is a hard failure. References must be recorded on CI's renderer (Xcode 26.5 / iOS 26.5): prefer the CI record path — run the **CI** workflow manually with `record_snapshots=true`, download the `snapshots-<run_id>` artifact, commit the PNGs. Only record locally (`TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all xcodebuild test ...` — a bare `SNAPSHOT_TESTING_RECORD` never reaches the test process) if your simulator runtime matches CI's, otherwise font/metric drift causes perpetual diffs. New snapshot tests inherit from `SnapshotTestCase` (`ios/ActTests/Support/SnapshotTestCase.swift`); references render at `ViewImageConfig.iPhone13Pro` dimensions.
+Snapshot tests compare SwiftUI renders against committed PNGs in `ios/ActTests/__snapshots__/`. CI sets `SNAPSHOT_TESTING_RECORD=never` (passed as `TEST_RUNNER_SNAPSHOT_TESTING_RECORD` — xcodebuild only forwards `TEST_RUNNER_`-prefixed env vars into the simulator test process, stripping the prefix), so a missing reference is a hard failure. References must be recorded on CI's renderer (Xcode 26.5 / iOS 26.5): prefer the CI record path — run the **CI** workflow manually with `record_snapshots=true`, download the `snapshots-<run_id>` artifact, commit the PNGs. Only record locally (`TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all xcodebuild test ...` without the old CODE_SIGNING flags — a bare `SNAPSHOT_TESTING_RECORD` never reaches the test process) if your simulator runtime matches CI's, otherwise font/metric drift causes perpetual diffs. New snapshot tests inherit from `SnapshotTestCase` (`ios/ActTests/Support/SnapshotTestCase.swift`); references render at `ViewImageConfig.iPhone13Pro` dimensions.
 
 ## Architecture
 
