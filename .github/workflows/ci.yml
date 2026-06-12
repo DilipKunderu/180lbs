@@ -82,7 +82,7 @@ jobs:
   xcode-test:
     name: xcode-test
     if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
-    runs-on: macos-15
+    runs-on: macos-26
     timeout-minutes: 30
     steps:
       - uses: actions/checkout@v5
@@ -103,13 +103,13 @@ jobs:
         run: xcodegen generate
       - name: Show Xcode version
         run: xcodebuild -version
-      - name: Ensure iOS 18.1 simulator runtime
+      - name: Ensure iOS 26.5 simulator runtime
         run: |
-          if ! xcrun simctl list runtimes | grep -q "iOS 18\.1"; then
-            echo "iOS 18.1 simulator runtime not present; downloading via xcodebuild -downloadPlatform iOS"
-            sudo xcodebuild -downloadPlatform iOS -buildVersion 18.1 || sudo xcodebuild -downloadPlatform iOS
+          if ! xcrun simctl list runtimes | grep -q "iOS 26\.5"; then
+            echo "iOS 26.5 simulator runtime not present; downloading via xcodebuild -downloadPlatform iOS"
+            sudo xcodebuild -downloadPlatform iOS -buildVersion 26.5 || sudo xcodebuild -downloadPlatform iOS
           fi
-          xcrun simctl list runtimes | grep "iOS 18" || true
+          xcrun simctl list runtimes | grep "iOS 26" || true
       - name: Resolve Swift packages
         working-directory: ios
         run: |
@@ -138,7 +138,7 @@ jobs:
           xcodebuild test \
             -project Act.xcodeproj \
             -scheme Act \
-            -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=26.5' \
             -clonedSourcePackagesDirPath SourcePackages \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
@@ -161,7 +161,7 @@ jobs:
         # PNGs — a missing reference is a hard test failure. This artifact
         # exposes the PNGs that ARE committed (plus any failure-diff PNGs
         # swift-snapshot-testing writes alongside on mismatch) so reviewers can
-        # inspect rendered references without an iOS 18.1 simulator locally.
+        # inspect rendered references without an iOS 26.5 simulator locally.
         if: always()
         uses: actions/upload-artifact@v4
         with:
