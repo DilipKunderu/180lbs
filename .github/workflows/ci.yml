@@ -19,14 +19,19 @@ concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# Same-repo PRs are skipped at the job level: the push event on the head branch
+# already runs the full pipeline, and GitHub attaches those check runs to the PR
+# by head SHA. The pull_request trigger is kept solely for fork PRs.
+
 jobs:
   design-doc-check:
     name: design-doc-check
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
       - name: Checkout (full history for immutability diff)
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       - name: Fetch origin/main if remote exists
@@ -41,21 +46,56 @@ jobs:
 
   swift-lint:
     name: swift-lint
-    runs-on: macos-15
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
+    runs-on: ubuntu-latest
     timeout-minutes: 10
+    env:
+      # Pinned so lint results are reproducible (brew installed latest-at-runtime
+      # before). Keep .githooks/pre-push guidance in sync when bumping.
+      SWIFTLINT_VERSION: 0.63.3
     steps:
-      - uses: actions/checkout@v4
-      - name: Install SwiftLint
-        run: brew install swiftlint
+      - uses: actions/checkout@v5
+      - name: Install SwiftLint (pinned, static Linux binary)
+        run: |
+          curl -fsSL -o swiftlint.zip \
+            "https://github.com/realm/SwiftLint/releases/download/${SWIFTLINT_VERSION}/swiftlint_linux_amd64.zip"
+          mkdir -p "$HOME/.local/bin"
+          unzip -o swiftlint.zip swiftlint -d "$HOME/.local/bin"
+          chmod +x "$HOME/.local/bin/swiftlint"
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Sanity-check custom hex-color rule fires on Linux
+        # The no_random_hex_color rule uses match_kinds (SourceKit-dependent).
+        # Prove it still fires on the static Linux build so a silently dead rule
+        # can never pass CI looking green.
+        run: |
+          echo 'let probe = "#FF00AA"' > ios/CIHexRuleProbeDeleteMe.swift
+          if swiftlint lint --quiet --reporter json ios/ | grep -q 'no_random_hex_color'; then
+            echo "custom rule fired as expected"
+          else
+            echo "::error::no_random_hex_color custom rule did not fire on the Linux SwiftLint build"
+            exit 1
+          fi
+          rm ios/CIHexRuleProbeDeleteMe.swift
       - name: Run SwiftLint
         run: swiftlint lint --strict --reporter github-actions-logging ios/
 
   xcode-test:
     name: xcode-test
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name != github.repository
     runs-on: macos-15
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
+      - name: Cache Swift packages
+        uses: actions/cache@v4
+        with:
+          path: ios/SourcePackages
+          # No committed Package.resolved (the xcodeproj is generated), so key on
+          # project.yml, where package pins live. restore-keys lets a stale cache
+          # still seed most checkouts after a dependency bump.
+          key: spm-${{ runner.os }}-${{ hashFiles('ios/project.yml') }}
+          restore-keys: |
+            spm-${{ runner.os }}-
       - name: Install XcodeGen
         run: brew install xcodegen
       - name: Generate Xcode project
@@ -72,7 +112,11 @@ jobs:
           xcrun simctl list runtimes | grep "iOS 18" || true
       - name: Resolve Swift packages
         working-directory: ios
-        run: xcodebuild -resolvePackageDependencies -project Act.xcodeproj -scheme Act
+        run: |
+          xcodebuild -resolvePackageDependencies \
+            -project Act.xcodeproj \
+            -scheme Act \
+            -clonedSourcePackagesDirPath SourcePackages
       - name: Build + test
         working-directory: ios
         # Normal runs: SNAPSHOT_TESTING_RECORD=never — a missing reference PNG is
@@ -81,8 +125,13 @@ jobs:
         # with `record_snapshots=true`; that run records (and is allowed to "fail"
         # the assertions) and uploads the PNGs as the `snapshots-<run_id>` artifact
         # for a human to download + commit. Then a normal push verifies them green.
+        # The TEST_RUNNER_ prefix is required: xcodebuild does NOT forward its
+        # own environment into the simulator test process. It only forwards
+        # variables prefixed TEST_RUNNER_, stripping the prefix, so the test
+        # process sees SNAPSHOT_TESTING_RECORD. Without the prefix the library
+        # never saw the value and record runs silently produced nothing.
         env:
-          SNAPSHOT_TESTING_RECORD: ${{ github.event.inputs.record_snapshots == 'true' && 'all' || 'never' }}
+          TEST_RUNNER_SNAPSHOT_TESTING_RECORD: ${{ github.event.inputs.record_snapshots == 'true' && 'all' || 'never' }}
         run: |
           set -o pipefail
           status=0
@@ -90,6 +139,7 @@ jobs:
             -project Act.xcodeproj \
             -scheme Act \
             -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \
+            -clonedSourcePackagesDirPath SourcePackages \
             CODE_SIGNING_ALLOWED=NO \
             CODE_SIGNING_REQUIRED=NO \
             -enableCodeCoverage NO \
@@ -117,5 +167,8 @@ jobs:
         with:
           name: snapshots-${{ github.run_id }}
           path: ios/ActTests/__snapshots__/
-          if-no-files-found: ignore
+          # warn (not ignore): upload-artifact skips hidden files, so a
+          # __snapshots__/ holding only .gitkeep counts as "no files". A record
+          # run that produced no PNGs should be visible, not silent.
+          if-no-files-found: warn
           retention-days: 14

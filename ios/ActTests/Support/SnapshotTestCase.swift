@@ -10,15 +10,18 @@ import XCTest
 /// all references in one place makes them easy to review in PRs.
 ///
 /// ## Recording (first run / update)
-/// Set the environment variable `SNAPSHOT_TESTING_RECORD=all` and run the
-/// test suite once to (re-)generate all reference PNGs, then commit them.
-/// CI runs the same simulator (`iPhone 16 Pro` on `macos-15` with iOS 18.1)
-/// so reference images recorded locally match CI byte-for-byte.
+/// Set `TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all` and run the test suite once
+/// to (re-)generate all reference PNGs, then commit them. The `TEST_RUNNER_`
+/// prefix is mandatory: xcodebuild forwards only `TEST_RUNNER_`-prefixed
+/// variables into the simulator test process (stripping the prefix); a bare
+/// `SNAPSHOT_TESTING_RECORD=all` never reaches the tests. CI runs the same
+/// simulator (`iPhone 16 Pro` on `macos-15` with iOS 18.1) so reference
+/// images recorded locally match CI byte-for-byte.
 ///
 /// ```bash
 /// cd ios
 /// xcodegen generate
-/// SNAPSHOT_TESTING_RECORD=all xcodebuild test \
+/// TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all xcodebuild test \
 ///   -project Act.xcodeproj -scheme Act \
 ///   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \
 ///   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
@@ -114,7 +117,20 @@ class SnapshotTestCase: XCTestCase {
     /// When the test skips, this helper emits an `XCTAttachment` named
     /// `"BOOTSTRAP-SKIP-<token>"` with a human-readable warning so the skip
     /// is visible in test logs and `.xcresult` bundles — not silent.
-    func XCTBootstrapSkipIfReferenceMissing(named token: String) throws {
+    ///
+    /// In record mode (`SNAPSHOT_TESTING_RECORD=all` or `missing`) the helper
+    /// never skips: skipping there would prevent `assertViewSnapshot` from
+    /// writing the reference this helper is waiting for — the record run would
+    /// silently produce nothing (the bug that motivated `environment:` being
+    /// injectable; see `SnapshotBootstrapSkipTests`).
+    func XCTBootstrapSkipIfReferenceMissing(
+        named token: String,
+        environment: [String: String] = ProcessInfo.processInfo.environment
+    ) throws {
+        let recordMode = environment["SNAPSHOT_TESTING_RECORD"]
+        if recordMode == "all" || recordMode == "missing" {
+            return
+        }
         let files = (try? FileManager.default.contentsOfDirectory(atPath: Self.snapshotDirectory)) ?? []
         let hasMatch = files.contains { $0.hasSuffix(".png") && $0.contains(token) }
         guard hasMatch else {

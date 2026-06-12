@@ -18,6 +18,7 @@ fi
 
 if ! command -v swiftlint >/dev/null 2>&1; then
   echo "swiftlint not installed; install via 'brew install swiftlint' for a faster pre-push gate. Skipping." >&2
+  echo "(CI pins SwiftLint via SWIFTLINT_VERSION in .github/workflows/ci.yml — match it to avoid drift.)" >&2
   exit 0
 fi
 
