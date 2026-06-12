@@ -15,7 +15,7 @@ import XCTest
 ///
 /// ```bash
 /// cd ios
-/// SNAPSHOT_TESTING_RECORD=all xcodebuild test \
+/// TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all xcodebuild test \
 ///   -project Act.xcodeproj -scheme Act \
 ///   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \
 ///   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO

@@ -10,15 +10,18 @@ import XCTest
 /// all references in one place makes them easy to review in PRs.
 ///
 /// ## Recording (first run / update)
-/// Set the environment variable `SNAPSHOT_TESTING_RECORD=all` and run the
-/// test suite once to (re-)generate all reference PNGs, then commit them.
-/// CI runs the same simulator (`iPhone 16 Pro` on `macos-15` with iOS 18.1)
-/// so reference images recorded locally match CI byte-for-byte.
+/// Set `TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all` and run the test suite once
+/// to (re-)generate all reference PNGs, then commit them. The `TEST_RUNNER_`
+/// prefix is mandatory: xcodebuild forwards only `TEST_RUNNER_`-prefixed
+/// variables into the simulator test process (stripping the prefix); a bare
+/// `SNAPSHOT_TESTING_RECORD=all` never reaches the tests. CI runs the same
+/// simulator (`iPhone 16 Pro` on `macos-15` with iOS 18.1) so reference
+/// images recorded locally match CI byte-for-byte.
 ///
 /// ```bash
 /// cd ios
 /// xcodegen generate
-/// SNAPSHOT_TESTING_RECORD=all xcodebuild test \
+/// TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all xcodebuild test \
 ///   -project Act.xcodeproj -scheme Act \
 ///   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \
 ///   CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO

@@ -113,8 +113,10 @@ xcodebuild test \
 ### Snapshot tests — recording reference images
 
 Snapshot tests compare rendered SwiftUI views against committed PNGs in
-`ios/ActTests/__snapshots__/`. CI sets `SNAPSHOT_TESTING_RECORD=never` so a
-missing reference is a hard failure.
+`ios/ActTests/__snapshots__/`. CI sets `SNAPSHOT_TESTING_RECORD=never` (via
+`TEST_RUNNER_SNAPSHOT_TESTING_RECORD` — xcodebuild only forwards env vars into
+the simulator test process when they carry the `TEST_RUNNER_` prefix, which it
+strips) so a missing reference is a hard failure.
 
 References must match the renderer that verifies them. CI verifies on
 **Xcode 16.4 / iOS 18.1**; recording on a different local toolchain (e.g.
@@ -137,7 +139,9 @@ workflow only when your local simulator runtime matches CI.
 ```bash
 cd ios
 xcodegen generate
-SNAPSHOT_TESTING_RECORD=all xcodebuild test \
+# TEST_RUNNER_ prefix required: xcodebuild strips it and forwards the variable
+# into the test process; a bare SNAPSHOT_TESTING_RECORD=all never reaches it.
+TEST_RUNNER_SNAPSHOT_TESTING_RECORD=all xcodebuild test \
   -project Act.xcodeproj \
   -scheme Act \
   -destination 'platform=iOS Simulator,name=iPhone 16 Pro,OS=18.1' \

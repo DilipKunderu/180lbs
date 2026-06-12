@@ -125,8 +125,13 @@ jobs:
         # with `record_snapshots=true`; that run records (and is allowed to "fail"
         # the assertions) and uploads the PNGs as the `snapshots-<run_id>` artifact
         # for a human to download + commit. Then a normal push verifies them green.
+        # The TEST_RUNNER_ prefix is required: xcodebuild does NOT forward its
+        # own environment into the simulator test process. It only forwards
+        # variables prefixed TEST_RUNNER_, stripping the prefix, so the test
+        # process sees SNAPSHOT_TESTING_RECORD. Without the prefix the library
+        # never saw the value and record runs silently produced nothing.
         env:
-          SNAPSHOT_TESTING_RECORD: ${{ github.event.inputs.record_snapshots == 'true' && 'all' || 'never' }}
+          TEST_RUNNER_SNAPSHOT_TESTING_RECORD: ${{ github.event.inputs.record_snapshots == 'true' && 'all' || 'never' }}
         run: |
           set -o pipefail
           status=0
