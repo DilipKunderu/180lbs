@@ -37,12 +37,16 @@ open ios/Act.xcodeproj
 ios/
 ├── project.yml              # XcodeGen spec (source of truth for the Xcode project)
 ├── Act/                     # App target  (bundle ID: com.act.coach)
-│   ├── App.swift
-│   ├── ContentView.swift
+│   ├── App.swift            # LocalStore → RootModel → RootView
+│   ├── RootView.swift       # loading / onboarding / Today routing
+│   ├── ContentView.swift    # Today placeholder until the Today coordinator lands
 │   ├── Info.plist
 │   ├── Act.entitlements
-│   └── Design/
-│       └── ACTTokens.swift  # Reserved for design-tokens todo
+│   ├── Design/
+│   │   └── ACTTokens.swift  # oklch-derived color + type tokens
+│   └── Onboarding/
+│       ├── ...              # renderer-free core (flow model, draft builder, coordinator/root models)
+│       └── Views/           # OnbShell + the 9 Onb* step views (design JSX is the source of truth)
 ├── ActWidgets/              # WidgetKit extension  (com.act.coach.Widgets)
 │   ├── ActWidgetsBundle.swift
 │   ├── Info.plist
@@ -54,12 +58,11 @@ ios/
 └── ActTests/                # Unit-test target  (com.act.coach.Tests)
     ├── ActTests.swift           # scaffold smoke test
     ├── ACTTokensTests.swift     # design-token invariants
-    ├── __snapshots__/           # committed reference PNGs (regenerate with SNAPSHOT_TESTING_RECORD=all)
+    ├── __snapshots__/           # committed reference PNGs (regenerate via the CI record path; see Snapshot tests below)
     ├── Coordinators/            # TodayCoordinator / HydrationMonitor / CessationCoordinator tests (future)
     ├── Persistence/             # MockCKDatabase harness + invariant tests
     │   └── MockCKDatabaseTests.swift
-    ├── Snapshots/               # SwiftUI snapshot tests (one per feature view, added per todo)
-    │   └── ContentViewSnapshotTests.swift
+    ├── Snapshots/               # SwiftUI snapshot tests (one file per Onb* view; references committed in the same PR)
     └── Support/                 # shared test helpers
         ├── MockCKDatabase.swift # in-memory CKDatabase shim (CI-safe, no real CloudKit)
         └── SnapshotTestCase.swift  # XCTestCase base class for snapshot tests

@@ -1,3 +1,6 @@
+import Observation
+
+@Observable
 final class OnboardingFlowModel {
     private(set) var step: OnboardingStep
     var draftBuilder: ProfileDraftBuilder
