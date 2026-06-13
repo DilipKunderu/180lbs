@@ -3,7 +3,7 @@ status: sketch
 authored_by: architect (drift-check #1)
 authored_at: 2026-05-22
 scope: forward-steering for sub-task 4 (`onboarding`)
-binds: docs/design/design.v3.md §Flow 4, §Stateful surfaces (Today coordinator), §Data model (PROFILE, WITHDRAWAL_STATE)
+binds: docs/design/design.v4.md §Flow 4, §Stateful surfaces (Today coordinator), §Data model (PROFILE, WITHDRAWAL_STATE)
 status_note: |
   This is a non-binding interface sketch surfaced for user approval. The
   onboarding driver MUST still follow Red→Green→Refactor: write the failing
@@ -38,132 +38,66 @@ The onboarding driver MUST NOT relax any of these:
 
 ## Sketch — types and protocol
 
-The repository is the surface that the GRDB todo will implement; the in-memory stub is what sub-task 4 ships. Errors are exhaustive so the test suite can assert each path. Async/await is the modern Swift contract — the driver can render UI off the main actor without grinding the snapshot harness.
+> **SUPERSEDED — shipped types differ from this sketch.**
+> The `OnboardingStep` enum and store protocol below have been updated to match
+> the shipped code. The remaining type sketches (`ProfileDraft`, `ProfileMutation`,
+> `Profile`, `CessationTrigger`) are stale: the shipped types use `String`/`Double`
+> (not `Decimal`/`DateComponents`) and differ in field names and structure.
+> **Do not implement from the stale sketches.** Use the shipped source files as
+> the authoritative source of truth:
+> - `ios/Act/Onboarding/` — `OnboardingStep`, `OnboardingFlowModel`, `OnboardingProfileStore`
+> - `ios/Act/Persistence/PersistenceSupport.swift` — `ProfileDraft`, `Profile`, `LocalStoreError`
+
+The store protocol is the surface that bridges the Onb* views and persistence. Errors surface via the existing `LocalStoreError` type (e.g. `profileAlreadyBootstrapped`), not a bespoke `OnboardingError`.
 
 ```swift
-// ios/Act/Onboarding/OnboardingTypes.swift  (sketch — driver writes the real file)
-
-import Foundation
+// ios/Act/Onboarding/OnboardingStep.swift  (SHIPPED)
 
 /// Linear progression through the onboarding flow.
-/// Mirrors §Flow 4 plus the auxiliary steps (Welcome, Rotation, Weight,
-/// Schedule, HealthKit, Bottle, Scale, Confirm).
 enum OnboardingStep: Int, CaseIterable, Hashable {
     case welcome
-    case quit          // captures quit_date + why_sentence + triggers
-    case rotation      // 4-week × 2-dish rotation seed
-    case weight        // height_in, sex, age, start_weight_lb, goal_weight_lb
-    case schedule      // wake_time, meal_window_*, bed_time
-    case healthKit     // per-type read+write auth
-    case notifications // UNUserNotificationCenter authorization + 7+7+1 registration
-    case bottle        // Hidrate Spark PRO pairing (HealthKit-mediated; opt-out)
-    case scale         // smart scale (HealthKit-mediated; opt-out)
-    case confirm
+    case profile
+    case health
+    case notifications
+    case scale
+    case hydration
+    case quit
+    case rotation
+    case grocery
 }
+```
 
-/// Closed set of cessation-trigger chip values stored as
-/// `profile.triggers` (JSON array). Wire format MUST be the raw values
-/// below so post-hoc analysis (e.g. RELAPSE_LOG.trigger ↔ profile.triggers
-/// overlap) is a string-equality join.
-enum CessationTrigger: String, CaseIterable, Codable {
-    case socialInvite   = "social_invite"
-    case stress         = "stress"
-    case boredom        = "boredom"
-    case ritual         = "ritual"
-    case specificPerson = "specific_person"
-    case specificPlace  = "specific_place"
-    case other          = "other"
-}
+```swift
+// ios/Act/Onboarding/OnboardingProfileStore.swift  (SHIPPED)
 
-/// Everything captured during onboarding. Fields that are immutable
-/// post-onboarding live ONLY here — they have no counterpart in
-/// `ProfileMutation` below.
-struct ProfileDraft {
-    var heightIn: Int
-    var sex: String                 // "M" | "F" | "other"  (closed set; consider enum)
-    var age: Int
-    var startWeightLb: Decimal      // IMMUTABLE post-bootstrap
-    var goalWeightLb: Decimal
-    var wakeTime: DateComponents    // hour/min, no date
-    var mealWindowStart: DateComponents
-    var mealWindowEnd: DateComponents
-    var bedTime: DateComponents
-    var kcalTarget: Int
-    var proteinTargetG: Int
-    var quitDate: Date              // IMMUTABLE post-bootstrap (captured at OnbQuit)
-    var whySentence: String
-    var triggers: [CessationTrigger]
-}
-
-/// Mutable subset. Anything NOT in this struct cannot be changed once
-/// the PROFILE row exists (notably: quit_date, start_weight_lb).
-struct ProfileMutation {
-    var goalWeightLb: Decimal?
-    var wakeTime: DateComponents?
-    var mealWindowStart: DateComponents?
-    var mealWindowEnd: DateComponents?
-    var bedTime: DateComponents?
-    var kcalTarget: Int?
-    var proteinTargetG: Int?
-    var whySentence: String?
-    var triggers: [CessationTrigger]?
-}
-
-/// Read-side projection. Add fields only as features need them.
-struct Profile: Equatable {
-    let id: String                  // "profile-singleton" by convention
-    let quitDate: Date
-    let startWeightLb: Decimal
-    let goalWeightLb: Decimal
-    let whySentence: String
-    let triggers: [CessationTrigger]
-    let cleanStreakDays: Int
-    let currentWeightLbCached: Decimal?
-    let adherencePctCached: Decimal?
-    // (omit until needed: wakeTime, mealWindow*, bedTime, kcalTarget, proteinTargetG, heightIn, sex, age)
-}
-
-enum OnboardingError: Error, Equatable {
-    /// `bootstrapProfile` called when a PROFILE row already exists.
-    case profileAlreadyBootstrapped
-    /// `updateProfile` called before `bootstrapProfile`.
-    case profileNotBootstrapped
-    /// Atomicity violation: PROFILE row was written but WITHDRAWAL_STATE
-    /// day-0 row failed. The implementation MUST roll back before throwing.
-    case bootstrapAtomicityViolation
-    case storageUnavailable(underlying: String)
-}
-
-/// Repository surface — the boundary between Onb* views and persistence.
+/// Store surface — the boundary between Onb* views and persistence.
 ///
-/// Sub-task 4 ships an in-memory implementation (`InMemoryOnboardingRepository`)
-/// living under `ios/Act/Onboarding/`. Todo #5 (schema) ships a
-/// `GRDBOnboardingRepository` against the same protocol. Both implementations
-/// share the same XCTest suite under `ios/ActTests/Onboarding/`.
+/// Errors surface as `LocalStoreError` (e.g. `profileAlreadyBootstrapped`),
+/// not a bespoke OnboardingError. Both methods are synchronous (not async);
+/// callers that need main-actor isolation manage that at the call site.
 ///
 /// Note: this protocol is intentionally narrow. It does NOT cover
 /// notification registration, HealthKit authorization, or CloudKit sync —
 /// those are separate single-responsibility services injected into the
-/// `OnboardingCoordinator` alongside the repository.
-protocol OnboardingRepository: AnyObject {
+/// coordinator alongside the store.
+protocol OnboardingProfileStore: AnyObject {
     /// Returns nil iff `bootstrapProfile` has never succeeded.
-    /// Implementations MUST be safe to call from a SwiftUI `.task` block.
-    func currentProfile() async throws -> Profile?
+    func currentProfile() throws -> Profile?
 
-    /// Atomically:
-    ///   1. inserts the singleton PROFILE row (rejecting if one already exists),
-    ///   2. inserts the WITHDRAWAL_STATE day-0 row pinned to `draft.quitDate`.
-    /// Either both writes commit or neither does (`bootstrapAtomicityViolation`).
+    /// Atomically inserts the singleton PROFILE row + WITHDRAWAL_STATE day-0 row.
+    /// Throws `LocalStoreError.profileAlreadyBootstrapped` on a second call.
     /// Returns the fully-hydrated Profile so the caller does not need to re-read.
-    func bootstrapProfile(_ draft: ProfileDraft) async throws -> Profile
-
-    /// Updates the mutable subset. Throws `profileNotBootstrapped` if no
-    /// row exists. Refreshes the cached columns (`adherence_pct_cached`,
-    /// `current_weight_lb_cached`) at the implementation's discretion;
-    /// this protocol does not constrain when the cache is recomputed.
-    func updateProfile(_ mutation: ProfileMutation) async throws
+    func bootstrapProfile(_ draft: ProfileDraft) throws -> Profile
 }
 ```
+
+> **Removed sketch types — do not implement from them.**
+>
+> The original sketch also defined `ProfileDraft` (with `Decimal`/`DateComponents`),
+> `ProfileMutation`, `Profile`, `CessationTrigger`, and `OnboardingError`. Those
+> blocks have been removed here because they were superseded by the shipped types in
+> `PersistenceSupport.swift` and the Onboarding layer. See the source files listed at
+> the top of this section for the authoritative shapes.
 
 ## Sketch — top-level router
 
