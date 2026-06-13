@@ -177,6 +177,28 @@ final class LocalStoreTests: XCTestCase {
         XCTAssertEqual(cloudMock.allRecords(ofType: RelapseLogRow.recordType).count, 1)
     }
 
+    /// G4: re-submitting the relapse form for the same EOD smoke check must
+    /// upsert the single allowed row (UNIQUE smoke_check_id), not throw a
+    /// constraint error. The latest reflection wins.
+    func test_upsertRelapseLog_secondSubmitSameSmokeCheck_upsertsWithoutConstraintError() throws {
+        try store.upsertSmokeCheck(LocalStoreTestSupport.makeSmokeCheck(date: "2026-05-22", answer: "relapse"))
+
+        var first = LocalStoreTestSupport.makeRelapseLog(date: "2026-05-22")
+        first.reflectionText = "First take"
+        try store.upsertRelapseLog(first)
+
+        var second = LocalStoreTestSupport.makeRelapseLog(date: "2026-05-22")
+        second.reflectionText = "Revised reflection"
+        XCTAssertNoThrow(try store.upsertRelapseLog(second))
+
+        try databaseQueue.read { db in
+            let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM relapse_log")
+            XCTAssertEqual(count, 1)
+            let reflection = try String.fetchOne(db, sql: "SELECT reflection_text FROM relapse_log LIMIT 1")
+            XCTAssertEqual(reflection, "Revised reflection")
+        }
+    }
+
     // MARK: - WITHDRAWAL_STATE day-1..7 gate + W7 happy path
 
     func test_withdrawalOutsideDayOneToSeven_isNoOp() throws {
