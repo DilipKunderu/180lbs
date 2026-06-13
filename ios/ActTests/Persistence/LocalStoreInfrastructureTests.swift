@@ -60,6 +60,31 @@ final class LocalStoreInfrastructureTests: XCTestCase {
         )
     }
 
+    // MARK: - D1: JSON columns use canonical design field names
+
+    /// design.v5 §Data model: the JSON-valued fields are named `triggers`
+    /// (PROFILE, URGE_LOG) and `items` (GROCERY_LIST) — the storage columns must
+    /// use those canonical names, not a `_json` suffix, so they agree with the
+    /// CKRecord keys and the design field names.
+    func test_jsonColumns_useCanonicalFieldNames_notJsonSuffix() throws {
+        let queue = try DatabaseQueue()
+        _ = try LocalStore(database: queue, cloudDatabase: nil)
+
+        try queue.read { db in
+            let profileCols = try String.fetchAll(db, sql: "SELECT name FROM pragma_table_info('profile')")
+            XCTAssertTrue(profileCols.contains("triggers"), "profile.triggers must use the canonical name")
+            XCTAssertFalse(profileCols.contains("triggers_json"), "profile must not keep the _json suffix")
+
+            let urgeCols = try String.fetchAll(db, sql: "SELECT name FROM pragma_table_info('urge_log')")
+            XCTAssertTrue(urgeCols.contains("triggers"), "urge_log.triggers must use the canonical name")
+            XCTAssertFalse(urgeCols.contains("triggers_json"))
+
+            let groceryCols = try String.fetchAll(db, sql: "SELECT name FROM pragma_table_info('grocery_list')")
+            XCTAssertTrue(groceryCols.contains("items"), "grocery_list.items must use the canonical name")
+            XCTAssertFalse(groceryCols.contains("items_json"))
+        }
+    }
+
     // MARK: - W6: hydration daily totals on wall-clock, not UTC
 
     func test_hydrationRunningTotal_usesWallClockDate_notUTC() throws {
