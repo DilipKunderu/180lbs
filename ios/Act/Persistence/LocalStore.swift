@@ -125,7 +125,18 @@ final class LocalStore {
 
     // MARK: - simple per-row upserts
 
-    func upsertLiftSession(_ row: LiftSessionRow) throws { try saveAndPropagate(row) }
+    func upsertLiftSession(_ row: LiftSessionRow) throws {
+        let deltas = try databaseWriter.write { db -> [CloudDelta] in
+            try row.save(db)
+            var deltas: [CloudDelta] = [.save(row.toCKRecord())]
+            if let adherenceDelta = try recomputeAdherencePct(db: db) {
+                deltas.append(adherenceDelta)
+            }
+            return deltas
+        }
+        propagate(deltas)
+    }
+
     func upsertLiftLog(_ row: LiftLogRow) throws { try saveAndPropagate(row) }
     func upsertSwimSession(_ row: SwimSessionRow) throws { try saveAndPropagate(row) }
     func upsertWalkSession(_ row: WalkSessionRow) throws { try saveAndPropagate(row) }
@@ -145,8 +156,11 @@ final class LocalStore {
         let deltas = try databaseWriter.write { db -> [CloudDelta] in
             try row.save(db)
             var deltas: [CloudDelta] = [.save(row.toCKRecord())]
-            if let profileDelta = try recomputeCurrentWeightCached(db: db) {
-                deltas.append(profileDelta)
+            if let weightDelta = try recomputeCurrentWeightCached(db: db) {
+                deltas.append(weightDelta)
+            }
+            if let adherenceDelta = try recomputeAdherencePct(db: db) {
+                deltas.append(adherenceDelta)
             }
             return deltas
         }
@@ -202,7 +216,11 @@ final class LocalStore {
                 row.id = existing.id
             }
             try row.save(db)
-            return [.save(row.toCKRecord())]
+            var deltas: [CloudDelta] = [.save(row.toCKRecord())]
+            if let adherenceDelta = try recomputeAdherencePct(db: db) {
+                deltas.append(adherenceDelta)
+            }
+            return deltas
         }
         propagate(deltas)
     }
@@ -220,6 +238,9 @@ final class LocalStore {
             }
             try row.save(db)
             deltas.append(.save(row.toCKRecord()))
+            if let adherenceDelta = try recomputeAdherencePct(db: db) {
+                deltas.append(adherenceDelta)
+            }
             return deltas
         }
         propagate(deltas)
@@ -241,6 +262,9 @@ final class LocalStore {
             var deltas: [CloudDelta] = [.save(row.toCKRecord())]
             if let profileDelta = try recomputeCleanStreakDays(db: db) {
                 deltas.append(profileDelta)
+            }
+            if let adherenceDelta = try recomputeAdherencePct(db: db) {
+                deltas.append(adherenceDelta)
             }
             return deltas
         }
@@ -364,6 +388,60 @@ private extension LocalStore {
         profile.currentWeightLbCached = latest.weightLb
         try profile.save(db)
         return .save(profile.toCKRecord())
+    }
+
+    /// Recomputes `PROFILE.adherence_pct_cached` per `design.v5 §Cached
+    /// projection — adherence_pct_cached`: the share of expected daily
+    /// adherence events answered over the 7 fully-elapsed days
+    /// `[today-7, today-1]` (the current partial day is excluded). For each
+    /// in-window day on or after `quit_date` the expected events are weigh-in,
+    /// meal (a MEAL_LOG **or** DEVIATION_LOG counts — an honest deviation is an
+    /// answered meal), and the EOD smoke check, plus a completed lift on lift
+    /// days (Mon/Wed/Fri). `round(answered / expected × 100)`, half away from
+    /// zero; `0` when no events are expected (denominator 0). Returns the
+    /// profile CloudDelta, or nil if no profile exists. Call inside a write block.
+    func recomputeAdherencePct(db: Database) throws -> CloudDelta? {
+        guard var profile = try ProfileRow.fetchOne(db) else { return nil }
+        guard let quitDate = parseCalendarDate(profile.quitDate) else { return nil }
+        let today = calendar.startOfDay(for: nowProvider())
+        var expected = 0
+        var answered = 0
+        for offset in 1...7 {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: today),
+                  let dayEnd = calendar.date(byAdding: .day, value: 1, to: day) else { continue }
+            if day < quitDate { continue }
+            let dayString = PersistenceDate.calendarDateString(from: day, calendar: calendar)
+
+            expected += 1
+            if try rowExists(db, "SELECT 1 FROM weight_log WHERE logged_at >= ? AND logged_at < ? LIMIT 1",
+                             [day, dayEnd]) { answered += 1 }
+
+            expected += 1
+            let hasMeal = try rowExists(db, "SELECT 1 FROM meal_log WHERE meal_date = ? LIMIT 1", [dayString])
+            let hasDeviation = try rowExists(db, "SELECT 1 FROM deviation_log WHERE meal_date = ? LIMIT 1", [dayString])
+            if hasMeal || hasDeviation { answered += 1 }
+
+            expected += 1
+            if try rowExists(db, "SELECT 1 FROM smoke_check WHERE check_date = ? LIMIT 1", [dayString]) {
+                answered += 1
+            }
+
+            // Gregorian .weekday: 1=Sun … 7=Sat → lift days are Mon(2)/Wed(4)/Fri(6).
+            let weekday = calendar.component(.weekday, from: day)
+            if weekday == 2 || weekday == 4 || weekday == 6 {
+                expected += 1
+                if try rowExists(db,
+                    "SELECT 1 FROM lift_session WHERE session_date = ? AND completed = 1 LIMIT 1",
+                    [dayString]) { answered += 1 }
+            }
+        }
+        profile.adherencePctCached = expected == 0 ? 0 : (Double(answered) / Double(expected) * 100).rounded()
+        try profile.save(db)
+        return .save(profile.toCKRecord())
+    }
+
+    func rowExists(_ db: Database, _ sql: String, _ arguments: StatementArguments) throws -> Bool {
+        try Int.fetchOne(db, sql: sql, arguments: arguments) != nil
     }
 
     func parseCalendarDate(_ value: String) -> Date? {
