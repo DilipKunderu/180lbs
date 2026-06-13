@@ -125,7 +125,6 @@ final class LocalStore {
 
     // MARK: - simple per-row upserts
 
-    func upsertWeightLog(_ row: WeightLogRow) throws { try saveAndPropagate(row) }
     func upsertLiftSession(_ row: LiftSessionRow) throws { try saveAndPropagate(row) }
     func upsertLiftLog(_ row: LiftLogRow) throws { try saveAndPropagate(row) }
     func upsertSwimSession(_ row: SwimSessionRow) throws { try saveAndPropagate(row) }
@@ -133,6 +132,26 @@ final class LocalStore {
     func upsertUrgeLog(_ row: UrgeLogRow) throws { try saveAndPropagate(row) }
     func upsertRotation(_ row: RotationRow) throws { try saveAndPropagate(row) }
     func upsertGroceryList(_ row: GroceryListRow) throws { try saveAndPropagate(row) }
+
+    // MARK: - WEIGHT_LOG with current-weight cache refresh
+
+    /// Saves a WEIGHT_LOG row and refreshes `PROFILE.current_weight_lb_cached`
+    /// to the latest weigh-in (by `logged_at`) before commit, per
+    /// `design.v5 §Data model` (cached columns refreshed on every write to the
+    /// underlying table). The refreshed PROFILE CKRecord is propagated alongside
+    /// the weight row so the Live Activity / widget / Today coordinator read a
+    /// single fresh row instead of `start_weight_lb` forever.
+    func upsertWeightLog(_ row: WeightLogRow) throws {
+        let deltas = try databaseWriter.write { db -> [CloudDelta] in
+            try row.save(db)
+            var deltas: [CloudDelta] = [.save(row.toCKRecord())]
+            if let profileDelta = try recomputeCurrentWeightCached(db: db) {
+                deltas.append(profileDelta)
+            }
+            return deltas
+        }
+        propagate(deltas)
+    }
 
     // MARK: - HYDRATION_LOG with wall-clock daily window
 
@@ -328,6 +347,21 @@ private extension LocalStore {
             cursorDate = previous
         }
         profile.cleanStreakDays = streak
+        try profile.save(db)
+        return .save(profile.toCKRecord())
+    }
+
+    /// Refreshes `PROFILE.current_weight_lb_cached` to the most recent
+    /// WEIGHT_LOG by `logged_at` (not insertion order, so an out-of-order
+    /// backfill never regresses the cache). Returns the profile CloudDelta, or
+    /// nil if no profile exists yet. Must be called inside a write block.
+    func recomputeCurrentWeightCached(db: Database) throws -> CloudDelta? {
+        guard var profile = try ProfileRow.fetchOne(db) else { return nil }
+        guard let latest = try WeightLogRow.fetchOne(
+            db,
+            sql: "SELECT * FROM weight_log ORDER BY logged_at DESC LIMIT 1"
+        ) else { return nil }
+        profile.currentWeightLbCached = latest.weightLb
         try profile.save(db)
         return .save(profile.toCKRecord())
     }
