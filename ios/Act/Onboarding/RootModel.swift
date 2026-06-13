@@ -15,9 +15,19 @@ final class RootModel {
 
     private let store: OnboardingProfileStore?
 
-    init(store: OnboardingProfileStore?, healthAuthorizer: (any HealthAuthorizationRequesting)? = nil) {
+    init(
+        store: OnboardingProfileStore?,
+        healthAuthorizer: (any HealthAuthorizationRequesting)? = nil,
+        notificationAuthorizer: (any NotificationAuthorizationRequesting)? = nil
+    ) {
         self.store = store
-        self.onboardingModel = store.map { OnboardingCoordinatorModel(store: $0, healthAuthorizer: healthAuthorizer) }
+        self.onboardingModel = store.map {
+            OnboardingCoordinatorModel(
+                store: $0,
+                healthAuthorizer: healthAuthorizer,
+                notificationAuthorizer: notificationAuthorizer
+            )
+        }
         onboardingModel?.onFinished = { [weak self] profile in
             self?.onboardingFinished(profile)
         }

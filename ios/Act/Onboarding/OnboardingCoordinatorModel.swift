@@ -76,10 +76,17 @@ final class OnboardingCoordinatorModel {
         }
 
         let leavingHealth = flowModel.step == .health
+        let leavingNotifications = flowModel.step == .notifications
         flowModel.advance()
 
         if leavingHealth, let authorizer = healthAuthorizer {
             healthAuthorizationTask = Task {
+                try? await authorizer.requestAuthorization()
+            }
+        }
+
+        if leavingNotifications, let authorizer = notificationAuthorizer {
+            notificationAuthorizationTask = Task {
                 try? await authorizer.requestAuthorization()
             }
         }

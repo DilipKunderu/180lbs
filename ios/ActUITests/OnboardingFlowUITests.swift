@@ -22,7 +22,11 @@ final class OnboardingFlowUITests: XCTestCase {
 
     func test_freshInstall_walksAllNineSteps_andLandsOnToday() {
         let app = XCUIApplication()
-        app.launchArguments = ["-ActResetLocalStore", "-ActSkipHealthKitAuthorization"]
+        app.launchArguments = [
+            "-ActResetLocalStore",
+            "-ActSkipHealthKitAuthorization",
+            "-ActSkipNotificationAuthorization"
+        ]
         app.launch()
 
         for (index, step) in steps.enumerated() {
