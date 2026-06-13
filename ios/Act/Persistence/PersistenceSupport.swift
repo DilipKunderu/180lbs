@@ -13,6 +13,10 @@ enum LocalStoreError: Error, Equatable {
     case profileAlreadyBootstrapped
     case relapseRequiresRelapseSmokeCheck
     case mealLogConflictsWithDeviation(mealDate: String)
+    /// Thrown when a profile write attempts to change a field that is immutable
+    /// post-onboarding (`quit_date`, `start_weight_lb`) — see design.v5 §Data
+    /// model and onboarding-interface.md §2/§3.
+    case profileImmutableFieldChanged(field: String)
 }
 
 enum PersistenceDate {

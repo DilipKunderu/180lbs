@@ -49,6 +49,30 @@ final class LocalStoreTests: XCTestCase {
         }
     }
 
+    /// DRIFT-ONB-1: quit_date and start_weight_lb are immutable post-onboarding.
+    /// The public write path must reject changing them on an existing profile,
+    /// while still allowing edits to mutable fields.
+    func test_upsertProfile_rejectsChangingImmutableFields_allowsMutableEdits() throws {
+        try store.upsertProfile(LocalStoreTestSupport.makeProfile()) // quit 2026-05-19, start 310
+
+        var changedQuit = LocalStoreTestSupport.makeProfile()
+        changedQuit.quitDate = "2026-01-01"
+        XCTAssertThrowsError(try store.upsertProfile(changedQuit)) { error in
+            XCTAssertEqual(error as? LocalStoreError, .profileImmutableFieldChanged(field: "quit_date"))
+        }
+
+        var changedStart = LocalStoreTestSupport.makeProfile()
+        changedStart.startWeightLb = 250
+        XCTAssertThrowsError(try store.upsertProfile(changedStart)) { error in
+            XCTAssertEqual(error as? LocalStoreError, .profileImmutableFieldChanged(field: "start_weight_lb"))
+        }
+
+        var editable = LocalStoreTestSupport.makeProfile()
+        editable.goalWeightLb = 175
+        XCTAssertNoThrow(try store.upsertProfile(editable))
+        XCTAssertEqual(try store.currentProfile()?.goalWeightLb, 175)
+    }
+
     // MARK: - SMOKE_CHECK / MEAL_LOG date-uniqueness
 
     func test_smokeCheckSameDate_upsertsInsteadOfDuplicateInsert() throws {
