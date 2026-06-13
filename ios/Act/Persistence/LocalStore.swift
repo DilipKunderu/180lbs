@@ -283,6 +283,16 @@ final class LocalStore {
             }
             var row = row
             row.smokeCheckID = smokeCheck.id
+            // RELAPSE_LOG is one-per-smoke-check (UNIQUE smoke_check_id). Reuse
+            // the existing row's PK so a re-submit UPDATEs in place instead of
+            // hitting the unique constraint with a fresh UUID.
+            if let existing = try RelapseLogRow.fetchOne(
+                db,
+                sql: "SELECT * FROM relapse_log WHERE smoke_check_id = ?",
+                arguments: [smokeCheck.id]
+            ) {
+                row.id = existing.id
+            }
             try row.save(db)
             return [.save(row.toCKRecord())]
         }
