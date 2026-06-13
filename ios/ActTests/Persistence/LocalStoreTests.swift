@@ -252,4 +252,86 @@ final class LocalStoreTests: XCTestCase {
             XCTAssertEqual(total, 20)
         }
     }
+
+    // MARK: - WEIGHT_LOG cache + cloud propagation
+
+    /// G1 (design.v5 §Data model): after a WEIGHT_LOG upsert the PROFILE
+    /// `current_weight_lb_cached` must equal the logged weight, not the
+    /// original `start_weight_lb`. Uses start=310, log=305.2 so a bug that
+    /// leaves the cache at start_weight_lb produces a meaningful failure.
+    func test_upsertWeightLog_refreshesCurrentWeightCacheOnProfile() throws {
+        try store.upsertProfile(LocalStoreTestSupport.makeProfile()) // start_weight_lb = 310
+
+        let entry = WeightLogRow(
+            id: UUID(),
+            loggedAt: LocalStoreTestSupport.utcDate("2026-05-22T07:00:00Z"),
+            weightLb: 305.2,
+            source: "manual_pad",
+            isMorningWeighIn: true
+        )
+        try store.upsertWeightLog(entry)
+
+        let profile = try store.currentProfile()
+        XCTAssertEqual(try XCTUnwrap(profile?.currentWeightLbCached), 305.2, accuracy: 0.001)
+    }
+
+    /// G1 edge-case: inserting an older-timestamped WEIGHT_LOG row after a
+    /// more-recent one must NOT regress the cache to the older value. The cache
+    /// must always reflect the entry with the maximum `logged_at`, not the
+    /// last-inserted row.
+    func test_upsertWeightLog_cacheReflectsLatestByLoggedAt_notInsertionOrder() throws {
+        try store.upsertProfile(LocalStoreTestSupport.makeProfile()) // start_weight_lb = 310
+
+        // Insert the NEWER weigh-in first.
+        let newerEntry = WeightLogRow(
+            id: UUID(),
+            loggedAt: LocalStoreTestSupport.utcDate("2026-05-22T07:00:00Z"),
+            weightLb: 303.0,
+            source: "manual_pad",
+            isMorningWeighIn: true
+        )
+        try store.upsertWeightLog(newerEntry)
+
+        // Then insert an OLDER weigh-in with a higher weight.
+        let olderEntry = WeightLogRow(
+            id: UUID(),
+            loggedAt: LocalStoreTestSupport.utcDate("2026-05-21T07:00:00Z"),
+            weightLb: 307.5,
+            source: "manual_pad",
+            isMorningWeighIn: true
+        )
+        try store.upsertWeightLog(olderEntry)
+
+        // Cache must stay at the NEWER entry's value (303.0), not regress to 307.5.
+        let profile = try store.currentProfile()
+        XCTAssertEqual(try XCTUnwrap(profile?.currentWeightLbCached), 303.0, accuracy: 0.001)
+    }
+
+    /// G1 cloud propagation: after `upsertWeightLog` a PROFILE CKRecord must
+    /// appear in the cloud mock carrying the refreshed `current_weight_lb_cached`.
+    func test_upsertWeightLog_propagatesRefreshedProfileCacheToCloud() throws {
+        try store.upsertProfile(LocalStoreTestSupport.makeProfile()) // start_weight_lb = 310
+        cloudMock.reset() // discard the initial profile save so we start clean
+
+        let entry = WeightLogRow(
+            id: UUID(),
+            loggedAt: LocalStoreTestSupport.utcDate("2026-05-22T07:00:00Z"),
+            weightLb: 305.2,
+            source: "manual_pad",
+            isMorningWeighIn: true
+        )
+        try store.upsertWeightLog(entry)
+
+        let profileRecords = cloudMock.allRecords(ofType: ProfileRow.recordType)
+        XCTAssertEqual(profileRecords.count, 1, "PROFILE CKRecord must be saved to cloud after weight log")
+
+        let propagatedWeight = profileRecords.first?["current_weight_lb_cached"] as? Double
+        XCTAssertEqual(try XCTUnwrap(propagatedWeight), 305.2, accuracy: 0.001)
+
+        // Verify the record uses the singleton record name.
+        XCTAssertEqual(
+            profileRecords.first?.recordID.recordName,
+            ProfileRow.singletonRecordName
+        )
+    }
 }
