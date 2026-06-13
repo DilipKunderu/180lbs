@@ -321,3 +321,9 @@ public actor HealthKitService {
         return .manualTyped
     }
 }
+
+// MARK: - HealthAuthorizationRequesting seam
+// `requestAuthorization()` already satisfies the protocol verbatim; this
+// extension wires the service-layer actor into the onboarding-layer protocol
+// without naming `HealthKitService` anywhere in the onboarding layer.
+extension HealthKitService: HealthAuthorizationRequesting {}

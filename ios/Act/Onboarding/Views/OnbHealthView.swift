@@ -1,8 +1,9 @@
 import SwiftUI
 
 /// Step 3 — "Health." Lists the HealthKit read/write scopes before the
-/// system prompt. Authorization itself is `HealthKitService`'s job, wired
-/// by the coordinator in a later sub-task.
+/// system prompt. When the user leaves this step, `OnboardingCoordinatorModel`
+/// fires a best-effort `requestAuthorization()` call through the injected
+/// `HealthAuthorizationRequesting` seam (backed by `HealthKitService` in production).
 struct OnbHealthView: View {
     var showsBackLink = false
     var onBack: () -> Void = {}
