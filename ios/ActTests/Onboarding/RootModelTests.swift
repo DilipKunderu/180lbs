@@ -62,4 +62,26 @@ final class RootModelTests: XCTestCase {
 
         XCTAssertEqual(model.destination, .today)
     }
+
+    // MARK: - Health authorization wiring
+
+    func test_onboardingModel_requestsHealthAuthorization_throughInjectedAuthorizer() async throws {
+        let spy = SpyHealthAuthorizer()
+        let model = RootModel(store: FakeOnboardingProfileStore(), healthAuthorizer: spy)
+        model.load()
+        let onboarding = try XCTUnwrap(
+            model.onboardingModel,
+            "expected an OnboardingCoordinatorModel when a store is provided"
+        )
+
+        // Advance welcome → profile → health (2 advances), then off .health (1 more).
+        // Step order: welcome(0), profile(1), health(2), notifications(3), …
+        onboarding.advance() // welcome → profile
+        onboarding.advance() // profile → health
+        onboarding.advance() // health → notifications; fires the authorization task
+
+        await onboarding.healthAuthorizationTask?.value
+
+        XCTAssertEqual(spy.requestCount, 1, "authorization must be requested exactly once when leaving .health")
+    }
 }
