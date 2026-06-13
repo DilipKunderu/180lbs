@@ -117,6 +117,18 @@ final class LocalStore {
             if let existing, existing.recordName != profile.recordName {
                 throw LocalStoreError.profileAlreadyExists
             }
+            // quit_date and start_weight_lb are immutable post-onboarding
+            // (design.v5 §Data model; onboarding-interface.md §2/§3). Reject any
+            // attempt to change them on an existing profile via this public path;
+            // bootstrapProfile is the only writer that sets them, once.
+            if let existing {
+                if profile.quitDate != existing.quitDate {
+                    throw LocalStoreError.profileImmutableFieldChanged(field: "quit_date")
+                }
+                if profile.startWeightLb != existing.startWeightLb {
+                    throw LocalStoreError.profileImmutableFieldChanged(field: "start_weight_lb")
+                }
+            }
             try profile.save(db)
             return [.save(profile.toCKRecord())]
         }
