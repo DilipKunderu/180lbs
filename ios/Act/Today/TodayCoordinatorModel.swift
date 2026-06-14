@@ -52,25 +52,41 @@ final class TodayCoordinatorModel {
         self.nowProvider = nowProvider
     }
 
-    // MARK: - Public interface (stubs — production bodies shipped in AUTHOR_CODE)
+    // MARK: - Public interface
 
     /// Re-read `TodayFacts` from the injected reader and re-resolve `state`.
-    /// STUB: does nothing — tests will fail red until the production body lands.
+    /// Swallows read errors — a failure leaves `state` unchanged so the Today
+    /// surface stays usable rather than crashing.
     func refresh() {
-        // TODO: read facts via reader + resolve + set state
+        guard let facts = try? reader.todayFacts(now: nowProvider()) else { return }
+        state = TodayCoordinator.resolve(facts, calendar: calendar)
     }
 
     /// Fire the async body-mass read into `bodyMassTask` and, once it
-    /// completes, set `prefilledWeightLb`.
-    /// STUB: does nothing — tests will fail red until the production body lands.
+    /// completes, set `prefilledWeightLb`. The task handle is assigned
+    /// synchronously before any async work begins — mirrors
+    /// `OnboardingCoordinatorModel.healthAuthorizationTask` so callers can
+    /// `await model.bodyMassTask?.value` to drain it deterministically.
     func loadBodyMass() {
-        // TODO: fire Task { prefilledWeightLb = await bodyMass.latestBodyMassLb() }
+        bodyMassTask = Task { [weak self] in
+            let lb = await self?.bodyMass.latestBodyMassLb()
+            self?.prefilledWeightLb = lb
+        }
     }
 
     /// Write a weigh-in row via the injected writer then call `refresh()` to
-    /// re-resolve state so the UI moves past `.weighIn`.
-    /// STUB: does nothing — tests will fail red until the production body lands.
+    /// re-resolve state so the UI moves past `.weighIn`. A throwing writer
+    /// surfaces the error to the caller and leaves `state` unchanged —
+    /// `refresh()` is only called after a successful write.
     func logWeighIn(lb: Double) throws {
-        // TODO: build WeightLogRow, call writer.upsertWeightLog, then refresh()
+        let row = WeightLogRow(
+            id: UUID(),
+            loggedAt: nowProvider(),
+            weightLb: lb,
+            source: "manual_pad",
+            isMorningWeighIn: false
+        )
+        try writer.upsertWeightLog(row)
+        refresh()
     }
 }
