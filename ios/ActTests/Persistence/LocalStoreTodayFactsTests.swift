@@ -94,6 +94,25 @@ final class LocalStoreTodayFactsTests: XCTestCase {
                       "weighInLogged must be true after a WEIGHT_LOG row is saved for today")
     }
 
+    // MARK: - ST3: write via the WeightLogWriting seam is visible to the read seam
+
+    /// Writing through the `WeightLogWriting` protocol surface (not the concrete
+    /// method) persists the weigh-in so the `TodayFactsReading` seam reports it —
+    /// the round-trip the TodayCoordinatorModel relies on (write → re-read facts).
+    func test_writeViaWeightLogWritingSeam_isVisibleToReadSeam() throws {
+        let writer: WeightLogWriting = store
+        try writer.upsertWeightLog(WeightLogRow(
+            id: UUID(),
+            loggedAt: todayLoggedAt,
+            weightLb: 284.0,
+            source: "manual_pad",
+            isMorningWeighIn: true
+        ))
+
+        XCTAssertTrue(try store.todayFacts(now: now).weighInLogged,
+                      "a weigh-in written through WeightLogWriting must be reflected by TodayFactsReading")
+    }
+
     // MARK: - Test 3: weight log for yesterday does NOT set weighInLogged
 
     func test_weighInLogged_isFalse_whenWeightLogIsFromYesterday() throws {
