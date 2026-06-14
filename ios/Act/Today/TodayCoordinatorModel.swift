@@ -79,6 +79,13 @@ final class TodayCoordinatorModel {
     /// surfaces the error to the caller and leaves `state` unchanged —
     /// `refresh()` is only called after a successful write.
     func logWeighIn(lb: Double) throws {
+        // FOLLOW-UP (bundle with the real anchored HealthKit body-mass read):
+        // - `source` is correct as "manual_pad" today (the body-mass reader is a
+        //   nil stub so every write IS manual); set it to "healthkit" on the
+        //   prefill-confirm path once a real reader lands.
+        // - `isMorningWeighIn` should be `(now - wakeAnchor) <= 30 min` per
+        //   design.v5 §Data model, not a constant — compute it when a consumer
+        //   first reads the flag. No shipped feature reads it yet.
         let row = WeightLogRow(
             id: UUID(),
             loggedAt: nowProvider(),
