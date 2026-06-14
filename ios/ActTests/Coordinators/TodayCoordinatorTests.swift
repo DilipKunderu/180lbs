@@ -20,7 +20,7 @@ final class TodayCoordinatorTests: XCTestCase {
     /// Pinned zone makes every ISO 8601 literal below unambiguous.
     private var cal: Calendar = {
         var c = Calendar(identifier: .gregorian)
-        c.timeZone = TimeZone(identifier: "America/Los_Angeles")!
+        c.timeZone = TimeZone(identifier: "America/Los_Angeles") ?? .gmt
         return c
     }()
 
@@ -248,10 +248,7 @@ final class TodayCoordinatorTests: XCTestCase {
         // 2026-06-15 03:00:00 UTC = Sunday 2026-06-14 20:00:00 PDT (LA)
         // UTC weekday: Monday (lift) → wrong answer would be .preWorkout
         // LA  weekday: Sunday (non-lift) → correct answer is .fasting
-        let utcFmt = ISO8601DateFormatter()
-        utcFmt.timeZone = TimeZone(identifier: "UTC")!
-        utcFmt.formatOptions = [.withFullDate, .withTime, .withColonSeparatorInTime, .withDashSeparatorInDate]
-        let now = utcFmt.date(from: "2026-06-15T03:00:00")!
+        let now = LocalStoreTestSupport.utcDate("2026-06-15T03:00:00Z")
 
         // Build facts where weigh-in is already logged so we branch to lift/non-lift
         // and the LA wake anchor (spliced onto LA 20:00) is before now (LA 20:00):
@@ -274,9 +271,12 @@ final class TodayCoordinatorTests: XCTestCase {
 
     // MARK: - 7. Exhaustiveness guard — every TodayState case must be reachable / named
 
-    /// A switch over `TodayState.allCases` that names every case explicitly.
-    /// Adding a new case to `TodayState` without updating this switch causes a
-    /// compile error, making the gap immediately visible to the next author.
+    // A switch over `TodayState.allCases` that names every case explicitly.
+    // Adding a new case to `TodayState` without updating this switch causes a
+    // compile error, making the gap immediately visible to the next author.
+    // A 12-case exhaustiveness switch is inherently complexity 13; the switch's
+    // value is the compile-time coverage, not branching logic.
+    // swiftlint:disable:next cyclomatic_complexity
     func test_allTodayStateCases_areNamedExhaustively() {
         // Enumerate all cases so the compiler enforces exhaustiveness.
         // New cases must be added here; the test body is intentionally trivial —

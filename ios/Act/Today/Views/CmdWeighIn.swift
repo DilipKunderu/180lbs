@@ -47,21 +47,22 @@ struct CmdWeighIn: View {
         OnbShell(
             hero: "Weigh.",
             ctaTitle: "Good.",
-            onCTA: { onGood(weight) }
-        ) {
-            VStack(alignment: .leading, spacing: 4) {
-                Text(formattedWeight(weight))
-                    .font(ACTTokens.TYPE.mono(.s84, weight: .heavy))
-                    .kerning(-3.5)
-                    .foregroundStyle(ACTTokens.text)
-                    .minimumScaleFactor(0.5)
-                    .lineLimit(1)
-                Text("LBS")
-                    .font(ACTTokens.TYPE.mono(.s13))
-                    .kerning(1.2)
-                    .foregroundStyle(ACTTokens.textDim)
+            onCTA: { onGood(weight) },
+            content: {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(formattedWeight(weight))
+                        .font(ACTTokens.TYPE.mono(.s84, weight: .heavy))
+                        .kerning(-3.5)
+                        .foregroundStyle(ACTTokens.text)
+                        .minimumScaleFactor(0.5)
+                        .lineLimit(1)
+                    Text("LBS")
+                        .font(ACTTokens.TYPE.mono(.s13))
+                        .kerning(1.2)
+                        .foregroundStyle(ACTTokens.textDim)
+                }
             }
-        }
+        )
     }
 
     // MARK: - Manual-pad fallback

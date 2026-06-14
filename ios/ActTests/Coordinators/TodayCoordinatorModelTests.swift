@@ -20,17 +20,12 @@ final class TodayCoordinatorModelTests: XCTestCase {
     /// UTC calendar: deterministic weekday independent of host TZ.
     private var utcCalendar: Calendar = {
         var c = Calendar(identifier: .gregorian)
-        c.timeZone = TimeZone(identifier: "UTC")!
+        c.timeZone = TimeZone(identifier: "UTC") ?? .gmt
         return c
     }()
 
     /// 2026-06-16 08:00:00 UTC — Tuesday post-wake, non-lift day.
-    private let fixedNow: Date = {
-        let fmt = ISO8601DateFormatter()
-        fmt.timeZone = TimeZone(identifier: "UTC")!
-        fmt.formatOptions = [.withFullDate, .withTime, .withColonSeparatorInTime, .withDashSeparatorInDate]
-        return fmt.date(from: "2026-06-16T08:00:00")!
-    }()
+    private let fixedNow = LocalStoreTestSupport.utcDate("2026-06-16T08:00:00Z")
 
     /// Wake anchor: 07:00 — fixedNow (08:00) is post-wake.
     private let wakeAnchor = DateComponents(hour: 7, minute: 0)
