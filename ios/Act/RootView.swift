@@ -1,9 +1,12 @@
 import SwiftUI
 
 /// Root of the view hierarchy: black while loading (no spinner — the design
-/// does not own a loading pattern), onboarding for a fresh install, Today
-/// for a returning user. `ContentView` stands in for the Today coordinator
-/// until that sub-task lands.
+/// does not own a loading pattern), onboarding for a fresh install, Today for
+/// a returning user.
+///
+/// Degraded rendering: if the model could not construct its coordinator model
+/// (e.g. store failed to open at launch), the affected branch renders the dark
+/// background only — same pattern for both onboarding-nil and todayModel-nil.
 struct RootView: View {
     let model: RootModel
 
@@ -19,7 +22,11 @@ struct RootView: View {
                     ACTTokens.bg.ignoresSafeArea()
                 }
             case .today:
-                ContentView()
+                if let todayModel = model.todayModel {
+                    TodayCoordinatorView(model: todayModel)
+                } else {
+                    ACTTokens.bg.ignoresSafeArea()
+                }
             }
         }
         .onAppear {

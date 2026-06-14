@@ -63,6 +63,51 @@ final class RootModelTests: XCTestCase {
         XCTAssertEqual(model.destination, .today)
     }
 
+    // MARK: - Today model wiring
+
+    /// Verifies that when `RootModel` is constructed with all three Today seams and resolves to
+    /// `.today` (store already has a profile), `todayModel` is non-nil. This is the RED driver
+    /// for sub-task 7; it will fail until `RootModel` gains a `todayModel` property and the
+    /// Today-seam init parameters.
+    func test_todayModel_isNonNil_whenStoreAndTodaySeanmsAreProvided_andResolvesToToday() throws {
+        let store = FakeOnboardingProfileStore()
+        store.profile = FakeOnboardingProfileStore.makeProfile()
+
+        let nowAfterWake = try XCTUnwrap(
+            Calendar(identifier: .gregorian).date(
+                from: DateComponents(year: 2026, month: 6, day: 13, hour: 9, minute: 0)
+            ),
+            "gregorian calendar must produce a date from valid components"
+        )
+        let facts = TodayFacts(
+            now: nowAfterWake,
+            wakeTime: DateComponents(hour: 5, minute: 0),
+            mealWindowStart: DateComponents(hour: 18, minute: 0),
+            bedTime: DateComponents(hour: 21, minute: 30),
+            weighInLogged: false
+        )
+        let reader = FakeTodayFactsReader(facts: facts)
+        let writer = WeightLogWritingSpy()
+        let bodyMass = FakeBodyMassReader(stubbedValue: nil)
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(
+            TimeZone(identifier: "America/New_York"),
+            "America/New_York must be a valid TimeZone identifier"
+        )
+
+        let model = RootModel(
+            store: store,
+            todayReader: reader,
+            todayWriter: writer,
+            bodyMass: bodyMass,
+            calendar: calendar
+        )
+        model.load()
+
+        XCTAssertEqual(model.destination, .today)
+        XCTAssertNotNil(model.todayModel, "todayModel must be non-nil when all Today seams are injected and destination resolves to .today")
+    }
+
     // MARK: - Health authorization wiring
 
     func test_onboardingModel_requestsHealthAuthorization_throughInjectedAuthorizer() async throws {

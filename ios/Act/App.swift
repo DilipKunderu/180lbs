@@ -22,10 +22,26 @@ struct ActApp: App {
         let healthAuthorizer: (any HealthAuthorizationRequesting)? = HealthKitService()
         let notificationAuthorizer: (any NotificationAuthorizationRequesting)? = NotificationService()
         #endif
+
+        // Build one LocalStore instance and pass it as both the onboarding store
+        // and the Today read/write seams — LocalStore conforms to both
+        // OnboardingProfileStore, TodayFactsReading, and WeightLogWriting.
+        // Sharing one instance ensures the reader and coordinator resolve on the
+        // same calendar (localStore.calendar), per the architect steering note
+        // in the plan (plans/today-coordinator-cmdweighin.md §Architecture).
+        let localStore = try? LocalStore()
         _rootModel = State(initialValue: RootModel(
-            store: try? LocalStore(),
+            store: localStore,
             healthAuthorizer: healthAuthorizer,
-            notificationAuthorizer: notificationAuthorizer
+            notificationAuthorizer: notificationAuthorizer,
+            todayReader: localStore,
+            todayWriter: localStore,
+            bodyMass: StubBodyMassReader(),
+            calendar: localStore?.calendar ?? {
+                var c = Calendar(identifier: .gregorian)
+                c.timeZone = .current
+                return c
+            }()
         ))
     }
 

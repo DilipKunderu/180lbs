@@ -19,7 +19,7 @@ final class LocalStore {
     /// public callers should never reach in directly.
     let databaseWriter: any DatabaseWriter
     private let cloudDatabase: CloudDatabase?
-    private let calendar: Calendar
+    let calendar: Calendar
     private let nowProvider: () -> Date
     private let dayZeroWriter: DayZeroWriter
 

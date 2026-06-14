@@ -39,14 +39,17 @@ ios/
 ├── Act/                     # App target  (bundle ID: com.act.coach)
 │   ├── App.swift            # LocalStore → RootModel → RootView
 │   ├── RootView.swift       # loading / onboarding / Today routing
-│   ├── ContentView.swift    # Today placeholder until the Today coordinator lands
 │   ├── Info.plist
 │   ├── Act.entitlements
 │   ├── Design/
 │   │   └── ACTTokens.swift  # oklch-derived color + type tokens
-│   └── Onboarding/
-│       ├── ...              # renderer-free core (flow model, draft builder, coordinator/root models)
-│       └── Views/           # OnbShell + the 9 Onb* step views (design JSX is the source of truth)
+│   ├── Onboarding/
+│   │   ├── ...              # renderer-free core (flow model, draft builder, coordinator/root models)
+│   │   └── Views/           # OnbShell + the 9 Onb* step views (design JSX is the source of truth)
+│   └── Today/
+│       ├── ...              # renderer-free core: TodayState, TodayCoordinator (pure resolver),
+│       │                    #   TodayFacts(+Reading), WeightLogWriting, BodyMassReading, model
+│       └── Views/           # TodayCoordinatorView switch + CmdWeighIn / CmdWeightPad (other Cmd* screens TBD)
 ├── ActWidgets/              # WidgetKit extension  (com.act.coach.Widgets)
 │   ├── ActWidgetsBundle.swift
 │   ├── Info.plist
@@ -58,7 +61,7 @@ ios/
 └── ActTests/                # Unit-test target  (com.act.coach.Tests)
     ├── ACTTokensTests.swift     # design-token invariants (incl. accent Display-P3 values)
     ├── __snapshots__/           # committed reference PNGs (regenerate via the CI record path; see Snapshot tests below)
-    ├── Coordinators/            # TodayCoordinator / HydrationMonitor / CessationCoordinator tests (future)
+    ├── Coordinators/            # TodayCoordinator + model tests (HydrationMonitor / CessationCoordinator TBD)
     ├── Persistence/             # MockCKDatabase harness + invariant tests
     │   └── MockCKDatabaseTests.swift
     ├── Snapshots/               # SwiftUI snapshot tests (one file per Onb* view; references committed in the same PR)
