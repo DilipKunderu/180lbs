@@ -168,11 +168,14 @@ final class LocalStore {
         let deltas = try databaseWriter.write { db -> [CloudDelta] in
             try row.save(db)
             var deltas: [CloudDelta] = [.save(row.toCKRecord())]
-            if let weightDelta = try recomputeCurrentWeightCached(db: db) {
-                deltas.append(weightDelta)
-            }
-            if let adherenceDelta = try recomputeAdherencePct(db: db) {
-                deltas.append(adherenceDelta)
+            // Both recomputes update the singleton PROFILE row; emit a SINGLE
+            // profile delta from the final row rather than one per recompute, so
+            // a write propagates one (not two) PROFILE saves — no stale snapshot,
+            // no reorder hazard for the future retry queue.
+            _ = try recomputeCurrentWeightCached(db: db)
+            _ = try recomputeAdherencePct(db: db)
+            if let profileDelta = try profileSaveDelta(db: db) {
+                deltas.append(profileDelta)
             }
             return deltas
         }
@@ -272,11 +275,12 @@ final class LocalStore {
             }
             try row.save(db)
             var deltas: [CloudDelta] = [.save(row.toCKRecord())]
-            if let profileDelta = try recomputeCleanStreakDays(db: db) {
+            // Single PROFILE delta from the final row (clean-streak + adherence
+            // both refresh it) — see upsertWeightLog for the rationale.
+            _ = try recomputeCleanStreakDays(db: db)
+            _ = try recomputeAdherencePct(db: db)
+            if let profileDelta = try profileSaveDelta(db: db) {
                 deltas.append(profileDelta)
-            }
-            if let adherenceDelta = try recomputeAdherencePct(db: db) {
-                deltas.append(adherenceDelta)
             }
             return deltas
         }
@@ -466,8 +470,17 @@ private extension LocalStore {
         try Int.fetchOne(db, sql: sql, arguments: arguments) != nil
     }
 
+    /// The current singleton PROFILE row as a single CloudDelta, or nil if no
+    /// profile exists. Used by write paths whose cached-column recomputes update
+    /// the profile, so they propagate exactly one (final-state) PROFILE save.
+    func profileSaveDelta(db: Database) throws -> CloudDelta? {
+        guard let profile = try ProfileRow.fetchOne(db) else { return nil }
+        return .save(profile.toCKRecord())
+    }
+
     func parseCalendarDate(_ value: String) -> Date? {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.calendar = calendar
         formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "yyyy-MM-dd"
