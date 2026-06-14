@@ -12,7 +12,7 @@ options:
   bundleIdPrefix: com.act.coach
   deploymentTarget:
     iOS: "26.0"
-  xcodeVersion: "16.2"
+  xcodeVersion: "26.0"
   groupSortPosition: none
   createIntermediateGroups: true
   defaultConfig: Debug
