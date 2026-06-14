@@ -123,6 +123,134 @@ final class LocalStoreCacheTests: XCTestCase {
         XCTAssertEqual(try XCTUnwrap(try store.currentProfile()?.adherencePctCached), 0, accuracy: 0.001)
     }
 
+    // MARK: - single PROFILE CloudDelta per write (F1)
+
+    /// upsertWeightLog calls both recomputeCurrentWeightCached and
+    /// recomputeAdherencePct, each of which independently saves the profile row
+    /// and returns a CloudDelta. Currently two PROFILE CKRecord saves are
+    /// propagated per write (the first carries a stale snapshot). Desired: exactly
+    /// one PROFILE save carrying all refreshed cached columns (design.v5 review,
+    /// Finding 1). RED: current code propagates 2, not 1.
+    func test_upsertWeightLog_propagatesExactlyOneProfileSave() throws {
+        try bootstrapProfile(quitDate: "2026-05-01")
+        cloudMock.reset() // clear the bootstrap save invocations
+
+        try store.upsertWeightLog(weighIn("2026-05-22", 305.2))
+
+        let profileSaves = cloudMock.savedRecordTypes.filter { $0 == ProfileRow.recordType }
+        XCTAssertEqual(profileSaves.count, 1,
+            "upsertWeightLog must propagate exactly ONE PROFILE CKRecord save; got \(profileSaves.count)")
+    }
+
+    /// upsertSmokeCheck calls both recomputeCleanStreakDays and
+    /// recomputeAdherencePct, each of which independently saves the profile row.
+    /// Same double-save hazard as upsertWeightLog.
+    /// RED: current code propagates 2, not 1.
+    func test_upsertSmokeCheck_propagatesExactlyOneProfileSave() throws {
+        try bootstrapProfile(quitDate: "2026-05-01")
+        cloudMock.reset() // clear the bootstrap save invocations
+
+        try store.upsertSmokeCheck(LocalStoreTestSupport.makeSmokeCheck(date: "2026-05-21", answer: "clean"))
+
+        let profileSaves = cloudMock.savedRecordTypes.filter { $0 == ProfileRow.recordType }
+        XCTAssertEqual(profileSaves.count, 1,
+            "upsertSmokeCheck must propagate exactly ONE PROFILE CKRecord save; got \(profileSaves.count)")
+    }
+
+    // MARK: - adherence rounds half away from zero (F2)
+
+    /// Pins design.v5's "round half away from zero" rule at an exact .5 tie.
+    /// 3 answered / 24 expected = 0.125 × 100 = 12.5 *exactly* in Double (1/8 and
+    /// 100 are both exact), so the tie-break is observable: half-away-from-zero
+    /// (Swift's `.rounded()` == `.toNearestOrAwayFromZero`) → 13; banker's
+    /// rounding (`.toNearestOrEven`) → 12; truncation → 12. Asserting 13 locks
+    /// the spec'd rule (design.v5 review, Finding 2).
+    ///
+    ///   now = 2026-05-22 Fri, quit 2026-05-01, window 2026-05-15..2026-05-21,
+    ///   denominator 24. Seed weigh-ins on exactly 3 window days → answered 3.
+    func test_adherence_roundsHalfAwayFromZero_atExactHalfTie() throws {
+        try bootstrapProfile(quitDate: "2026-05-01")
+
+        for day in ["2026-05-15", "2026-05-16", "2026-05-17"] {
+            try store.upsertWeightLog(weighIn(day, 300)) // 3 answered / 24 → 12.5
+        }
+
+        XCTAssertEqual(
+            try XCTUnwrap(try store.currentProfile()?.adherencePctCached),
+            13,
+            accuracy: 0.001,
+            "12.5 must round half-away-from-zero to 13, not to 12 (banker's) or 12 (truncation)"
+        )
+    }
+
+    // MARK: - adherence weight-log bucketing on wall-clock day (F3)
+
+    /// Pins that the adherence weight-log day-boundary query uses the store's
+    /// wall-clock calendar, not UTC. Mirrors the style of
+    /// test_hydrationRunningTotal_usesWallClockDate_notUTC in
+    /// LocalStoreInfrastructureTests. (design.v5 review, Finding 3.)
+    ///
+    /// Scenario:
+    ///   Store calendar: America/Los_Angeles (UTC-7 in May, PDT).
+    ///   now = 2026-05-23T06:55:00Z = 2026-05-22 23:55 PDT.
+    ///     → local today = 2026-05-22 PDT → local window = [05-15…05-21] local.
+    ///     → UTC today (buggy) = 2026-05-23 → UTC window (buggy) = [05-16…05-22].
+    ///
+    ///   The local window opens one day EARLIER than the UTC window: local 05-15
+    ///   is inside the local 7-day window but OUTSIDE the UTC 7-day window.
+    ///
+    ///   Weigh-in at 2026-05-15T12:00:00Z (= 2026-05-15 05:00 PDT):
+    ///     Local day: 2026-05-15 — offset 7 from local today → IN local window.
+    ///     UTC day:   2026-05-15 — offset 8 from UTC today 2026-05-23
+    ///                           → OUTSIDE the UTC 7-day window.
+    ///
+    ///   Only the weigh-in is seeded, no other events.
+    ///   expected = 7×3 + 3 lift days = 24.
+    ///   answered (local) = 1 → adherence = round(1/24×100) = round(4.17) = 4.
+    ///   answered (UTC)   = 0 (weigh-in excluded) → adherence = 0.
+    ///   Assert 4 to distinguish wall-clock from UTC bucketing.
+    func test_adherence_weightLog_bucketsOnWallClockDay_notUTC() throws {
+        var pacific = Calendar(identifier: .gregorian)
+        pacific.timeZone = TimeZone(identifier: "America/Los_Angeles") ?? .gmt
+        let pacificQueue = try DatabaseQueue()
+        let pacificStore = try LocalStore(
+            database: pacificQueue,
+            cloudDatabase: nil,
+            calendar: pacific,
+            // 2026-05-22 23:55 PDT = 2026-05-23 06:55 UTC.
+            // Local today = 2026-05-22 PDT → local window [05-15…05-21].
+            // UTC-buggy today = 2026-05-23 → UTC window [05-16…05-22]: 05-15 excluded.
+            nowProvider: { LocalStoreTestSupport.utcDate("2026-05-23T06:55:00Z") }
+        )
+
+        // Bootstrap profile with quit date well before the window.
+        var profile = LocalStoreTestSupport.makeProfile()
+        profile.quitDate = "2026-05-01"
+        try pacificStore.upsertProfile(profile)
+
+        // 2026-05-15T12:00:00Z = 2026-05-15 05:00 PDT → local day 2026-05-15 (in local window,
+        // offset 7 from 2026-05-22 PDT today). UTC day is 2026-05-15, which is offset 8 from
+        // UTC-buggy today 2026-05-23 → falls outside the UTC window entirely.
+        try pacificStore.upsertWeightLog(WeightLogRow(
+            id: UUID(),
+            loggedAt: LocalStoreTestSupport.utcDate("2026-05-15T12:00:00Z"),
+            weightLb: 300,
+            source: "manual_pad",
+            isMorningWeighIn: false
+        ))
+
+        // Window: 7 days × 3 base events + 3 lift days (Mon/Wed/Fri in [05-15…05-21]:
+        //   Fri 05-15, Mon 05-18, Wed 05-20) → expected=24.
+        // Local bucketing: weigh-in on local 05-15 counted → answered=1 → round(1/24×100)=4.
+        // UTC bucketing:   weigh-in on UTC 05-15 is offset 8 from UTC 05-23 → excluded → 0.
+        XCTAssertEqual(
+            try XCTUnwrap(try pacificStore.currentProfile()?.adherencePctCached),
+            4,
+            accuracy: 0.001,
+            "weigh-in at 05:00 PDT on 05-15 is the 7th window day locally but outside the UTC window; must be counted"
+        )
+    }
+
     // MARK: - helpers
 
     private let windowDays = [
