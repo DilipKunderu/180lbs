@@ -6,7 +6,7 @@ Single-user iOS coach — dark-mode only, Apple-native stack, TestFlight-only.
 
 | Tool | Version |
 |------|---------|
-| Xcode | 16.2+ |
+| Xcode | 26.x (CI builds on 26.5) |
 | iOS deployment target | 26.0 — always tracks the latest iOS |
 | Device | A17 Pro or M-series (Apple Intelligence requirement) |
 | Ruby | 3.x (for Fastlane) |
@@ -56,8 +56,7 @@ ios/
 │   ├── Info.plist
 │   └── ActLiveActivity.entitlements
 └── ActTests/                # Unit-test target  (com.act.coach.Tests)
-    ├── ActTests.swift           # scaffold smoke test
-    ├── ACTTokensTests.swift     # design-token invariants
+    ├── ACTTokensTests.swift     # design-token invariants (incl. accent Display-P3 values)
     ├── __snapshots__/           # committed reference PNGs (regenerate via the CI record path; see Snapshot tests below)
     ├── Coordinators/            # TodayCoordinator / HydrationMonitor / CessationCoordinator tests (future)
     ├── Persistence/             # MockCKDatabase harness + invariant tests
@@ -86,19 +85,19 @@ The three runtime targets (app + both extensions) are enrolled in App Group `gro
 | HealthKit (read + write) | Usage strings in Info.plist |
 | CloudKit (`iCloud.com.act.coach`) | Private database for cross-device sync/backup |
 | App Groups (`group.com.act.coach`) | Shared SQLite mirror for extensions |
-| Push Notifications (entitlement only) | Required by ActivityKit; no APNs key exists |
+| Push Notifications (entitlement only) | Required by ActivityKit; no APNs key exists. Local-notification *permission* is requested at the `OnbNotifications` step via `NotificationService`; scheduled-notification registration is deferred to a future subsystem |
 | Background Fetch + Processing | `BGProcessingTask` id: `com.act.coach.weekly-insight` |
 | Live Activities (`NSSupportsLiveActivities`) | ActivityKit via Live Activity extension |
 
 ## HealthKit integration
 
-`HealthKitService` is the only production path that touches `HKHealthStore`, requesting read access for body mass, step count, sleep analysis, resting heart rate, heart rate variability (SDNN), VO2 max, and dietary water, plus write access for workouts, dietary energy consumed, and dietary water. Hydration updates stream through an observer + anchored query pair, and de-dup follows the binding contract in `docs/design/design.v3.md` §Failure modes: manual tap entries within 60 seconds of a same-volume Hidrate sample are treated as the same sip when computing daily running totals.
+`HealthKitService` is the only production path that touches `HKHealthStore`, requesting read access for body mass, step count, sleep analysis, resting heart rate, heart rate variability (SDNN), VO2 max, and dietary water, plus write access for workouts, dietary energy consumed, and dietary water. Hydration updates stream through an observer + anchored query pair, and de-dup follows the binding contract in `docs/design/design.v5.md` §Failure modes: manual tap entries within 60 seconds of a same-volume Hidrate sample are treated as the same sip when computing daily running totals.
 
 ## Persistence layer
 
-Act. uses a local-first persistence split defined by `docs/design/design.v3.md` §Data model: all 15 user-domain entities are represented as CloudKit `CKRecord` types, and the app reads/writes through a GRDB SQLite mirror for fast on-device queries and offline-first writes. The SQLite file is shared across the app, WidgetKit extension, and Live Activity extension via the App Group container path `FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.act.coach")!.appendingPathComponent("act.sqlite")`, so every runtime surface sees the same data without cross-sandbox read failures.
+Act. uses a local-first persistence split defined by `docs/design/design.v5.md` §Data model: all 15 user-domain entities are represented as CloudKit `CKRecord` types, and the app reads/writes through a GRDB SQLite mirror for fast on-device queries and offline-first writes. The SQLite file is shared across the app, WidgetKit extension, and Live Activity extension via the App Group container path `FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: "group.com.act.coach")!.appendingPathComponent("act.sqlite")`, so every runtime surface sees the same data without cross-sandbox read failures.
 
-`LocalStore` opens the production SQLite via `DatabasePool` configured with `busyMode = .timeout(5.0)` and `PRAGMA journal_mode = WAL`, so the main app, widget, and Live Activity processes can all read/write the same file without contention failures. Public write APIs commit the GRDB transaction first, then propagate `CKRecord` deltas to CloudKit best-effort; a CloudKit failure does not roll back the local row, preserving the offline-first contract from `design.v3 §Data model:160`. Onboarding goes through `bootstrapProfile(_:)`, which atomically inserts the singleton `PROFILE` row and the day-0 `WITHDRAWAL_STATE` row in a single transaction and throws `LocalStoreError.profileAlreadyBootstrapped` on a second call.
+`LocalStore` opens the production SQLite via `DatabasePool` configured with `busyMode = .timeout(5.0)` and `PRAGMA journal_mode = WAL`, so the main app, widget, and Live Activity processes can all read/write the same file without contention failures. Public write APIs commit the GRDB transaction first, then propagate `CKRecord` deltas to CloudKit best-effort; a CloudKit failure does not roll back the local row, preserving the offline-first contract from `design.v5 §Data model`. Onboarding goes through `bootstrapProfile(_:)`, which atomically inserts the singleton `PROFILE` row and the day-0 `WITHDRAWAL_STATE` sentinel row in a single transaction and throws `LocalStoreError.profileAlreadyBootstrapped` on a second call. The cached `PROFILE` columns are refreshed before each commit per `design.v5 §Data model`: `current_weight_lb_cached` on weight writes, `clean_streak_days` and the 7-day rolling `adherence_pct_cached` on the relevant writes — each write propagates a single refreshed `PROFILE` delta. `quit_date` and `start_weight_lb` are immutable post-onboarding; the write path rejects changes with `LocalStoreError.profileImmutableFieldChanged`.
 
 ## Running tests locally
 
@@ -168,4 +167,4 @@ xcodebuild test \
 
 ## Design
 
-See `docs/design/design.v3.md` (current canonical design). Design files are immutable once merged.
+See `docs/design/design.v5.md` (current canonical design — the file named in `docs/design/CURRENT`). Design files are immutable once merged; each new version supersedes the last.

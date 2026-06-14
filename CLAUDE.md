@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-"Act." — a single-user iOS coach app (dark-mode only, Apple-native, TestFlight-only). All app code lives under `ios/`; product/design truth lives in `docs/design/design.v3.md`.
+"Act." — a single-user iOS coach app (dark-mode only, Apple-native, TestFlight-only). All app code lives under `ios/`; product/design truth lives in `docs/design/design.v5.md`.
 
 ## Commands
 
@@ -52,7 +52,7 @@ Four targets: `Act` (app, `com.act.coach`), `ActWidgets` and `ActLiveActivity` (
 
 ### Persistence (local-first, `ios/Act/Persistence/`)
 
-Dual representation of all 15 user-domain entities, defined by `design.v3.md §Data model`:
+Dual representation of all 15 user-domain entities, defined by `design.v5.md §Data model`:
 
 - `CKRecords/*CKRecord.swift` — CloudKit record encode/decode per entity.
 - `Rows/*Row.swift` — GRDB row types for the local SQLite mirror.
@@ -69,15 +69,15 @@ Renderer-free core (no SwiftUI in these types): `OnboardingStep` (linear step en
 
 ### HealthKit (`ios/Act/Service/HealthKit.swift`)
 
-`HealthKitService` is the **only** production path that touches `HKHealthStore`. Hydration streams via observer + anchored query; manual entries within 60s of a same-volume Hidrate sample are de-duped per `design.v3.md §Failure modes`.
+`HealthKitService` is the **only** production path that touches `HKHealthStore`. Hydration streams via observer + anchored query; manual entries within 60s of a same-volume Hidrate sample are de-duped per `design.v5.md §Failure modes`.
 
 ## Design docs are immutable
 
-`docs/design/design.v*.md` files may never be modified, deleted, or renamed once merged — CI's `design-doc-check` job fails the build on any `M`/`D`/`R` diff. To change the design, add a new `design.v(N+1).md` (with the required frontmatter keys: `version`, `supersedes`, `created_at`, `created_by`, non-empty `changelog_vs_previous`) and bump `docs/design/CURRENT`. The current canonical doc is whatever `CURRENT` points to (`design.v3.md` today).
+`docs/design/design.v*.md` files may never be modified, deleted, or renamed once merged — CI's `design-doc-check` job fails the build on any `M`/`D`/`R` diff. To change the design, add a new `design.v(N+1).md` (with the required frontmatter keys: `version`, `supersedes`, `created_at`, `created_by`, non-empty `changelog_vs_previous`) and bump `docs/design/CURRENT`. The current canonical doc is whatever `CURRENT` points to (`design.v5.md` today).
 
 ## Design system constraints (enforced)
 
-A custom SwiftLint rule bans hex colors outside the locked background set (`#000000`, `#0A0A0A`, `#141414`, `#1C1C1E`; `#FFFFFF` for legibility tests only) — all other colors come from `ACTTokens` (`ios/Act/Design/ACTTokens.swift`, oklch-based; invariants tested in `ACTTokensTests`). UI follows the "A · Command" system: one hero word per screen ending in a period, single lime sticky CTA, SF Mono for all numerics, no cards. Cessation copy has a locked register — no shame language ("stay strong", "slip", etc.); see `docs/architecture/onboarding-interface.md` §7 and `design.v3.md §Hard lines`.
+A custom SwiftLint rule bans hex colors outside the locked background set (`#000000`, `#0A0A0A`, `#141414`, `#1C1C1E`; `#FFFFFF` for legibility tests only) — all other colors come from `ACTTokens` (`ios/Act/Design/ACTTokens.swift`, oklch-based; invariants tested in `ACTTokensTests`). UI follows the "A · Command" system: one hero word per screen ending in a period, single lime sticky CTA, SF Mono for all numerics, no cards. Cessation copy has a locked register — no shame language ("stay strong", "slip", etc.); see `docs/architecture/onboarding-interface.md` §7 and `design.v5.md §Hard lines`.
 
 ## CI / deploy
 
