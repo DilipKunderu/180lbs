@@ -16,7 +16,7 @@ struct UrgeLogRow: Codable, FetchableRecord, PersistableRecord {
         case id
         case loggedAt = "logged_at"
         case intensity
-        case triggersJSON = "triggers_json"
+        case triggersJSON = "triggers"
         case didBreathing = "did_breathing"
         case breathingCyclesCompleted = "breathing_cycles_completed"
     }

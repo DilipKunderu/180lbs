@@ -12,10 +12,11 @@ extension DeviationLogRow {
         record["logged_at"] = loggedAt
         record["reason"] = reason
         if let photoURL {
-            // `design.v3 §Data model:259`: DEVIATION_LOG.photo is a CKAsset on the
-            // CloudKit record. The local-store side keeps the URL pointer; CKAsset
+            // `design.v5 §Data model`: DEVIATION_LOG.photo_url is a CKAsset on the
+            // CloudKit record. Key matches the Row property / SQLite column and the
+            // design field name. The local-store side keeps the URL pointer; CKAsset
             // wraps the same fileURL so callers never need to read the bytes.
-            record["photo"] = CKAsset(fileURL: photoURL)
+            record["photo_url"] = CKAsset(fileURL: photoURL)
         }
         record["kcal_est"] = kcalEst
         record["protein_g_est"] = proteinGEst
@@ -30,7 +31,7 @@ extension DeviationLogRow {
               let reason = record.string(forKey: "reason"),
               let kcalEst = record.int(forKey: "kcal_est"),
               let proteinGEst = record.int(forKey: "protein_g_est") else { return nil }
-        let photoURL = (record["photo"] as? CKAsset)?.fileURL
+        let photoURL = (record["photo_url"] as? CKAsset)?.fileURL
         self.init(
             id: id,
             mealDate: mealDate,

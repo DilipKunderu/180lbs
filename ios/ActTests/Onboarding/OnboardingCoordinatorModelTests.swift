@@ -7,14 +7,16 @@ final class OnboardingCoordinatorModelTests: XCTestCase {
         store: FakeOnboardingProfileStore = FakeOnboardingProfileStore(),
         startingAt step: OnboardingStep = .welcome,
         now: Date = Date(timeIntervalSince1970: 0),
-        authorizer: (any HealthAuthorizationRequesting)? = nil
+        authorizer: (any HealthAuthorizationRequesting)? = nil,
+        notificationAuthorizer: (any NotificationAuthorizationRequesting)? = nil
     ) -> OnboardingCoordinatorModel {
         OnboardingCoordinatorModel(
             store: store,
             flowModel: OnboardingFlowModel(step: step),
             nowProvider: { now },
             timeZone: TimeZone(identifier: "UTC") ?? .current,
-            healthAuthorizer: authorizer
+            healthAuthorizer: authorizer,
+            notificationAuthorizer: notificationAuthorizer
         )
     }
 
@@ -172,6 +174,71 @@ final class OnboardingCoordinatorModelTests: XCTestCase {
                          "expected no auth task when advancing from .\(step)")
             XCTAssertEqual(spy.requestCount, 0,
                            "expected zero auth requests when advancing from .\(step)")
+        }
+    }
+
+    // MARK: - Notification authorization seam (GAP-ONB-1)
+
+    /// Advancing off `.notifications` must (a) move the step forward immediately
+    /// and (b) fire exactly one `requestAuthorization()` through the injected
+    /// notification seam (the system permission sheet; registration stays
+    /// deferred per design.v5 §Flow 4).
+    func test_advanceFromNotifications_advancesImmediately_andRequestsNotificationAuthorizationOnce() async {
+        let spy = SpyNotificationAuthorizer()
+        let model = makeModel(startingAt: .notifications, notificationAuthorizer: spy)
+
+        model.advance()
+
+        XCTAssertEqual(model.step, .scale)
+        XCTAssertNotNil(model.notificationAuthorizationTask,
+                        "expected a retained task handle after advancing from .notifications")
+
+        await model.notificationAuthorizationTask?.value
+
+        XCTAssertEqual(spy.requestCount, 1)
+    }
+
+    /// A denial / thrown error must be swallowed: the flow still advances.
+    func test_advanceFromNotifications_whenAuthorizationThrows_stillAdvances() async {
+        let spy = SpyNotificationAuthorizer()
+        spy.thrownError = NSError(domain: "test", code: 1)
+        let model = makeModel(startingAt: .notifications, notificationAuthorizer: spy)
+
+        model.advance()
+
+        XCTAssertEqual(model.step, .scale)
+        XCTAssertNotNil(model.notificationAuthorizationTask)
+
+        await model.notificationAuthorizationTask?.value
+
+        XCTAssertEqual(spy.requestCount, 1)
+        XCTAssertFalse(model.bootstrapFailed)
+    }
+
+    /// No authorizer injected (UI-test / no-op path): advancing must not crash
+    /// and must leave `notificationAuthorizationTask` nil.
+    func test_advanceFromNotifications_withNilAuthorizer_doesNotCrashAndLeavesTaskNil() {
+        let model = makeModel(startingAt: .notifications, notificationAuthorizer: nil)
+
+        model.advance()
+
+        XCTAssertEqual(model.step, .scale)
+        XCTAssertNil(model.notificationAuthorizationTask)
+    }
+
+    /// No step other than `.notifications` triggers a notification-auth request.
+    func test_advanceFromOtherSteps_doesNotRequestNotificationAuthorization() {
+        let otherSteps = OnboardingStep.allCases.filter { $0 != .notifications }
+        for step in otherSteps {
+            let spy = SpyNotificationAuthorizer()
+            let model = makeModel(startingAt: step, notificationAuthorizer: spy)
+
+            model.advance()
+
+            XCTAssertNil(model.notificationAuthorizationTask,
+                         "expected no notification-auth task when advancing from .\(step)")
+            XCTAssertEqual(spy.requestCount, 0,
+                           "expected zero notification-auth requests when advancing from .\(step)")
         }
     }
 }

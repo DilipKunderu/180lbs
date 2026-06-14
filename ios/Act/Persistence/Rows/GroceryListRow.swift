@@ -15,7 +15,7 @@ struct GroceryListRow: Codable, FetchableRecord, PersistableRecord {
         case id
         case shopDate = "shop_date"
         case weekIndex = "week_index"
-        case itemsJSON = "items_json"
+        case itemsJSON = "items"
         case sentToReminders = "sent_to_reminders"
     }
 }

@@ -24,8 +24,11 @@ final class DeviationLogCKRecordTests: XCTestCase {
         )
 
         let record = row.toCKRecord()
-        XCTAssertNotNil(record["photo"] as? CKAsset, "DEVIATION_LOG.photo must encode as CKAsset")
-        XCTAssertEqual((record["photo"] as? CKAsset)?.fileURL, tempPath)
+        // D2: the CKRecord key is the design-canonical `photo_url`, matching the
+        // Row property / SQLite column; the legacy `photo` key is retired.
+        XCTAssertNil(record["photo"], "legacy 'photo' CKRecord key must no longer be used")
+        XCTAssertNotNil(record["photo_url"] as? CKAsset, "DEVIATION_LOG.photo_url must encode as CKAsset")
+        XCTAssertEqual((record["photo_url"] as? CKAsset)?.fileURL, tempPath)
 
         guard let recovered = DeviationLogRow(record: record) else {
             return XCTFail("CKRecord round-trip must succeed for DeviationLogRow")

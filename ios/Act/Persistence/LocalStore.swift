@@ -117,6 +117,18 @@ final class LocalStore {
             if let existing, existing.recordName != profile.recordName {
                 throw LocalStoreError.profileAlreadyExists
             }
+            // quit_date and start_weight_lb are immutable post-onboarding
+            // (design.v5 §Data model; onboarding-interface.md §2/§3). Reject any
+            // attempt to change them on an existing profile via this public path;
+            // bootstrapProfile is the only writer that sets them, once.
+            if let existing {
+                if profile.quitDate != existing.quitDate {
+                    throw LocalStoreError.profileImmutableFieldChanged(field: "quit_date")
+                }
+                if profile.startWeightLb != existing.startWeightLb {
+                    throw LocalStoreError.profileImmutableFieldChanged(field: "start_weight_lb")
+                }
+            }
             try profile.save(db)
             return [.save(profile.toCKRecord())]
         }
@@ -125,14 +137,50 @@ final class LocalStore {
 
     // MARK: - simple per-row upserts
 
-    func upsertWeightLog(_ row: WeightLogRow) throws { try saveAndPropagate(row) }
-    func upsertLiftSession(_ row: LiftSessionRow) throws { try saveAndPropagate(row) }
+    func upsertLiftSession(_ row: LiftSessionRow) throws {
+        let deltas = try databaseWriter.write { db -> [CloudDelta] in
+            try row.save(db)
+            var deltas: [CloudDelta] = [.save(row.toCKRecord())]
+            if let adherenceDelta = try recomputeAdherencePct(db: db) {
+                deltas.append(adherenceDelta)
+            }
+            return deltas
+        }
+        propagate(deltas)
+    }
+
     func upsertLiftLog(_ row: LiftLogRow) throws { try saveAndPropagate(row) }
     func upsertSwimSession(_ row: SwimSessionRow) throws { try saveAndPropagate(row) }
     func upsertWalkSession(_ row: WalkSessionRow) throws { try saveAndPropagate(row) }
     func upsertUrgeLog(_ row: UrgeLogRow) throws { try saveAndPropagate(row) }
     func upsertRotation(_ row: RotationRow) throws { try saveAndPropagate(row) }
     func upsertGroceryList(_ row: GroceryListRow) throws { try saveAndPropagate(row) }
+
+    // MARK: - WEIGHT_LOG with current-weight cache refresh
+
+    /// Saves a WEIGHT_LOG row and refreshes `PROFILE.current_weight_lb_cached`
+    /// to the latest weigh-in (by `logged_at`) before commit, per
+    /// `design.v5 §Data model` (cached columns refreshed on every write to the
+    /// underlying table). The refreshed PROFILE CKRecord is propagated alongside
+    /// the weight row so the Live Activity / widget / Today coordinator read a
+    /// single fresh row instead of `start_weight_lb` forever.
+    func upsertWeightLog(_ row: WeightLogRow) throws {
+        let deltas = try databaseWriter.write { db -> [CloudDelta] in
+            try row.save(db)
+            var deltas: [CloudDelta] = [.save(row.toCKRecord())]
+            // Both recomputes update the singleton PROFILE row; emit a SINGLE
+            // profile delta from the final row rather than one per recompute, so
+            // a write propagates one (not two) PROFILE saves — no stale snapshot,
+            // no reorder hazard for the future retry queue.
+            _ = try recomputeCurrentWeightCached(db: db)
+            _ = try recomputeAdherencePct(db: db)
+            if let profileDelta = try profileSaveDelta(db: db) {
+                deltas.append(profileDelta)
+            }
+            return deltas
+        }
+        propagate(deltas)
+    }
 
     // MARK: - HYDRATION_LOG with wall-clock daily window
 
@@ -183,7 +231,11 @@ final class LocalStore {
                 row.id = existing.id
             }
             try row.save(db)
-            return [.save(row.toCKRecord())]
+            var deltas: [CloudDelta] = [.save(row.toCKRecord())]
+            if let adherenceDelta = try recomputeAdherencePct(db: db) {
+                deltas.append(adherenceDelta)
+            }
+            return deltas
         }
         propagate(deltas)
     }
@@ -201,6 +253,9 @@ final class LocalStore {
             }
             try row.save(db)
             deltas.append(.save(row.toCKRecord()))
+            if let adherenceDelta = try recomputeAdherencePct(db: db) {
+                deltas.append(adherenceDelta)
+            }
             return deltas
         }
         propagate(deltas)
@@ -220,7 +275,11 @@ final class LocalStore {
             }
             try row.save(db)
             var deltas: [CloudDelta] = [.save(row.toCKRecord())]
-            if let profileDelta = try recomputeCleanStreakDays(db: db) {
+            // Single PROFILE delta from the final row (clean-streak + adherence
+            // both refresh it) — see upsertWeightLog for the rationale.
+            _ = try recomputeCleanStreakDays(db: db)
+            _ = try recomputeAdherencePct(db: db)
+            if let profileDelta = try profileSaveDelta(db: db) {
                 deltas.append(profileDelta)
             }
             return deltas
@@ -240,6 +299,16 @@ final class LocalStore {
             }
             var row = row
             row.smokeCheckID = smokeCheck.id
+            // RELAPSE_LOG is one-per-smoke-check (UNIQUE smoke_check_id). Reuse
+            // the existing row's PK so a re-submit UPDATEs in place instead of
+            // hitting the unique constraint with a fresh UUID.
+            if let existing = try RelapseLogRow.fetchOne(
+                db,
+                sql: "SELECT * FROM relapse_log WHERE smoke_check_id = ?",
+                arguments: [smokeCheck.id]
+            ) {
+                row.id = existing.id
+            }
             try row.save(db)
             return [.save(row.toCKRecord())]
         }
@@ -332,8 +401,86 @@ private extension LocalStore {
         return .save(profile.toCKRecord())
     }
 
+    /// Refreshes `PROFILE.current_weight_lb_cached` to the most recent
+    /// WEIGHT_LOG by `logged_at` (not insertion order, so an out-of-order
+    /// backfill never regresses the cache). Returns the profile CloudDelta, or
+    /// nil if no profile exists yet. Must be called inside a write block.
+    func recomputeCurrentWeightCached(db: Database) throws -> CloudDelta? {
+        guard var profile = try ProfileRow.fetchOne(db) else { return nil }
+        guard let latest = try WeightLogRow.fetchOne(
+            db,
+            sql: "SELECT * FROM weight_log ORDER BY logged_at DESC LIMIT 1"
+        ) else { return nil }
+        profile.currentWeightLbCached = latest.weightLb
+        try profile.save(db)
+        return .save(profile.toCKRecord())
+    }
+
+    /// Recomputes `PROFILE.adherence_pct_cached` per `design.v5 §Cached
+    /// projection — adherence_pct_cached`: the share of expected daily
+    /// adherence events answered over the 7 fully-elapsed days
+    /// `[today-7, today-1]` (the current partial day is excluded). For each
+    /// in-window day on or after `quit_date` the expected events are weigh-in,
+    /// meal (a MEAL_LOG **or** DEVIATION_LOG counts — an honest deviation is an
+    /// answered meal), and the EOD smoke check, plus a completed lift on lift
+    /// days (Mon/Wed/Fri). `round(answered / expected × 100)`, half away from
+    /// zero; `0` when no events are expected (denominator 0). Returns the
+    /// profile CloudDelta, or nil if no profile exists. Call inside a write block.
+    func recomputeAdherencePct(db: Database) throws -> CloudDelta? {
+        guard var profile = try ProfileRow.fetchOne(db) else { return nil }
+        guard let quitDate = parseCalendarDate(profile.quitDate) else { return nil }
+        let today = calendar.startOfDay(for: nowProvider())
+        var expected = 0
+        var answered = 0
+        for offset in 1...7 {
+            guard let day = calendar.date(byAdding: .day, value: -offset, to: today),
+                  let dayEnd = calendar.date(byAdding: .day, value: 1, to: day) else { continue }
+            if day < quitDate { continue }
+            let dayString = PersistenceDate.calendarDateString(from: day, calendar: calendar)
+
+            expected += 1
+            if try rowExists(db, "SELECT 1 FROM weight_log WHERE logged_at >= ? AND logged_at < ? LIMIT 1",
+                             [day, dayEnd]) { answered += 1 }
+
+            expected += 1
+            let hasMeal = try rowExists(db, "SELECT 1 FROM meal_log WHERE meal_date = ? LIMIT 1", [dayString])
+            let hasDeviation = try rowExists(db, "SELECT 1 FROM deviation_log WHERE meal_date = ? LIMIT 1", [dayString])
+            if hasMeal || hasDeviation { answered += 1 }
+
+            expected += 1
+            if try rowExists(db, "SELECT 1 FROM smoke_check WHERE check_date = ? LIMIT 1", [dayString]) {
+                answered += 1
+            }
+
+            // Gregorian .weekday: 1=Sun … 7=Sat → lift days are Mon(2)/Wed(4)/Fri(6).
+            let weekday = calendar.component(.weekday, from: day)
+            if weekday == 2 || weekday == 4 || weekday == 6 {
+                expected += 1
+                if try rowExists(db,
+                    "SELECT 1 FROM lift_session WHERE session_date = ? AND completed = 1 LIMIT 1",
+                    [dayString]) { answered += 1 }
+            }
+        }
+        profile.adherencePctCached = expected == 0 ? 0 : (Double(answered) / Double(expected) * 100).rounded()
+        try profile.save(db)
+        return .save(profile.toCKRecord())
+    }
+
+    func rowExists(_ db: Database, _ sql: String, _ arguments: StatementArguments) throws -> Bool {
+        try Int.fetchOne(db, sql: sql, arguments: arguments) != nil
+    }
+
+    /// The current singleton PROFILE row as a single CloudDelta, or nil if no
+    /// profile exists. Used by write paths whose cached-column recomputes update
+    /// the profile, so they propagate exactly one (final-state) PROFILE save.
+    func profileSaveDelta(db: Database) throws -> CloudDelta? {
+        guard let profile = try ProfileRow.fetchOne(db) else { return nil }
+        return .save(profile.toCKRecord())
+    }
+
     func parseCalendarDate(_ value: String) -> Date? {
         let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
         formatter.calendar = calendar
         formatter.timeZone = calendar.timeZone
         formatter.dateFormat = "yyyy-MM-dd"

@@ -44,7 +44,7 @@ extension LocalStore {
             t.column("protein_target_g", .integer).notNull()
             t.column("quit_date", .text).notNull()
             t.column("why_sentence", .text).notNull()
-            t.column("triggers_json", .text).notNull()
+            t.column("triggers", .text).notNull()
             t.column("clean_streak_days", .integer).notNull()
             t.column("current_weight_lb_cached", .double).notNull()
             t.column("adherence_pct_cached", .double).notNull()
@@ -170,7 +170,7 @@ extension LocalStore {
             t.column("id", .text).primaryKey()
             t.column("logged_at", .datetime).notNull()
             t.column("intensity", .integer).notNull()
-            t.column("triggers_json", .text).notNull()
+            t.column("triggers", .text).notNull()
             t.column("did_breathing", .boolean).notNull()
             t.column("breathing_cycles_completed", .integer).notNull()
         }
@@ -195,7 +195,7 @@ extension LocalStore {
             t.column("id", .text).primaryKey()
             t.column("shop_date", .text).notNull()
             t.column("week_index", .integer).notNull()
-            t.column("items_json", .text).notNull()
+            t.column("items", .text).notNull()
             t.column("sent_to_reminders", .boolean).notNull()
         }
     }

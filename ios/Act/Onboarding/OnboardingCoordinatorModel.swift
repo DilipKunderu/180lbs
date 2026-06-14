@@ -23,23 +23,33 @@ final class OnboardingCoordinatorModel {
     /// not yet left `.health`.
     @ObservationIgnored private(set) var healthAuthorizationTask: Task<Void, Never>?
 
+    /// Retained handle for the most-recent notification-authorization
+    /// fire-and-forget task, set synchronously when the user leaves
+    /// `.notifications` (same draining contract as `healthAuthorizationTask`).
+    /// `nil` when no authorizer is injected or the user has not yet left
+    /// `.notifications`.
+    @ObservationIgnored private(set) var notificationAuthorizationTask: Task<Void, Never>?
+
     @ObservationIgnored var onFinished: ((Profile) -> Void)?
     private let store: OnboardingProfileStore
     private let nowProvider: () -> Date
     private let dayFormatter: DateFormatter
     private let healthAuthorizer: (any HealthAuthorizationRequesting)?
+    private let notificationAuthorizer: (any NotificationAuthorizationRequesting)?
 
     init(
         store: OnboardingProfileStore,
         flowModel: OnboardingFlowModel = OnboardingFlowModel(),
         nowProvider: @escaping () -> Date = Date.init,
         timeZone: TimeZone = .current,
-        healthAuthorizer: (any HealthAuthorizationRequesting)? = nil
+        healthAuthorizer: (any HealthAuthorizationRequesting)? = nil,
+        notificationAuthorizer: (any NotificationAuthorizationRequesting)? = nil
     ) {
         self.store = store
         self.flowModel = flowModel
         self.nowProvider = nowProvider
         self.healthAuthorizer = healthAuthorizer
+        self.notificationAuthorizer = notificationAuthorizer
 
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "en_US_POSIX")
@@ -66,10 +76,17 @@ final class OnboardingCoordinatorModel {
         }
 
         let leavingHealth = flowModel.step == .health
+        let leavingNotifications = flowModel.step == .notifications
         flowModel.advance()
 
         if leavingHealth, let authorizer = healthAuthorizer {
             healthAuthorizationTask = Task {
+                try? await authorizer.requestAuthorization()
+            }
+        }
+
+        if leavingNotifications, let authorizer = notificationAuthorizer {
+            notificationAuthorizationTask = Task {
                 try? await authorizer.requestAuthorization()
             }
         }

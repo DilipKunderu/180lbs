@@ -9,7 +9,7 @@ struct OnbHealthView: View {
     var onBack: () -> Void = {}
     var onCTA: () -> Void = {}
 
-    private let readTypes = ["Weight", "Steps", "Sleep", "Resting HR", "HRV", "VO2 max"]
+    private let readTypes = ["Weight", "Steps", "Sleep", "Resting HR", "HRV", "VO2 max", "Dietary water"]
     private let writeTypes = ["Workouts", "Dietary energy", "Dietary water"]
 
     var body: some View {

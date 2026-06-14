@@ -49,6 +49,30 @@ final class LocalStoreTests: XCTestCase {
         }
     }
 
+    /// DRIFT-ONB-1: quit_date and start_weight_lb are immutable post-onboarding.
+    /// The public write path must reject changing them on an existing profile,
+    /// while still allowing edits to mutable fields.
+    func test_upsertProfile_rejectsChangingImmutableFields_allowsMutableEdits() throws {
+        try store.upsertProfile(LocalStoreTestSupport.makeProfile()) // quit 2026-05-19, start 310
+
+        var changedQuit = LocalStoreTestSupport.makeProfile()
+        changedQuit.quitDate = "2026-01-01"
+        XCTAssertThrowsError(try store.upsertProfile(changedQuit)) { error in
+            XCTAssertEqual(error as? LocalStoreError, .profileImmutableFieldChanged(field: "quit_date"))
+        }
+
+        var changedStart = LocalStoreTestSupport.makeProfile()
+        changedStart.startWeightLb = 250
+        XCTAssertThrowsError(try store.upsertProfile(changedStart)) { error in
+            XCTAssertEqual(error as? LocalStoreError, .profileImmutableFieldChanged(field: "start_weight_lb"))
+        }
+
+        var editable = LocalStoreTestSupport.makeProfile()
+        editable.goalWeightLb = 175
+        XCTAssertNoThrow(try store.upsertProfile(editable))
+        XCTAssertEqual(try store.currentProfile()?.goalWeightLb, 175)
+    }
+
     // MARK: - SMOKE_CHECK / MEAL_LOG date-uniqueness
 
     func test_smokeCheckSameDate_upsertsInsteadOfDuplicateInsert() throws {
@@ -175,6 +199,28 @@ final class LocalStoreTests: XCTestCase {
         }
 
         XCTAssertEqual(cloudMock.allRecords(ofType: RelapseLogRow.recordType).count, 1)
+    }
+
+    /// G4: re-submitting the relapse form for the same EOD smoke check must
+    /// upsert the single allowed row (UNIQUE smoke_check_id), not throw a
+    /// constraint error. The latest reflection wins.
+    func test_upsertRelapseLog_secondSubmitSameSmokeCheck_upsertsWithoutConstraintError() throws {
+        try store.upsertSmokeCheck(LocalStoreTestSupport.makeSmokeCheck(date: "2026-05-22", answer: "relapse"))
+
+        var first = LocalStoreTestSupport.makeRelapseLog(date: "2026-05-22")
+        first.reflectionText = "First take"
+        try store.upsertRelapseLog(first)
+
+        var second = LocalStoreTestSupport.makeRelapseLog(date: "2026-05-22")
+        second.reflectionText = "Revised reflection"
+        XCTAssertNoThrow(try store.upsertRelapseLog(second))
+
+        try databaseQueue.read { db in
+            let count = try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM relapse_log")
+            XCTAssertEqual(count, 1)
+            let reflection = try String.fetchOne(db, sql: "SELECT reflection_text FROM relapse_log LIMIT 1")
+            XCTAssertEqual(reflection, "Revised reflection")
+        }
     }
 
     // MARK: - WITHDRAWAL_STATE day-1..7 gate + W7 happy path

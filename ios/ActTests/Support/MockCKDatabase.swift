@@ -39,13 +39,24 @@ import Foundation
 final class MockCKDatabase {
 
     private var store: [CKRecord.ID: CKRecord] = [:]
+    private var _savedRecordTypes: [String] = []
     private let queue = DispatchQueue(label: "com.act.coach.MockCKDatabase")
+
+    /// Ordered log of every `save(_:completionHandler:)` invocation's recordType,
+    /// including duplicates. Unlike `allRecords(ofType:)` (which dedupes by ID),
+    /// this lets tests assert the exact number of CKRecord saves propagated for
+    /// a given type — catching the double-PROFILE-save hazard in upsertWeightLog
+    /// and upsertSmokeCheck (Finding 1 / design.v5 review).
+    var savedRecordTypes: [String] {
+        queue.sync { _savedRecordTypes }
+    }
 
     // MARK: - CKDatabase surface (save / fetch / delete)
 
     func save(_ record: CKRecord, completionHandler: @escaping (CKRecord?, Error?) -> Void) {
         queue.async {
             self.store[record.recordID] = record
+            self._savedRecordTypes.append(record.recordType)
             DispatchQueue.global().async {
                 completionHandler(record, nil)
             }
@@ -99,8 +110,11 @@ final class MockCKDatabase {
         }
     }
 
-    /// Removes every record from the in-memory store.
+    /// Removes every record from the in-memory store and clears the invocation log.
     func reset() {
-        queue.sync { store.removeAll() }
+        queue.sync {
+            store.removeAll()
+            _savedRecordTypes.removeAll()
+        }
     }
 }

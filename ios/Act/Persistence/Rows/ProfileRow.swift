@@ -40,7 +40,7 @@ struct ProfileRow: Codable, FetchableRecord, PersistableRecord {
         case proteinTargetG = "protein_target_g"
         case quitDate = "quit_date"
         case whySentence = "why_sentence"
-        case triggersJSON = "triggers_json"
+        case triggersJSON = "triggers"
         case cleanStreakDays = "clean_streak_days"
         case currentWeightLbCached = "current_weight_lb_cached"
         case adherencePctCached = "adherence_pct_cached"

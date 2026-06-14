@@ -3,12 +3,12 @@ status: sketch
 authored_by: architect (drift-check #1)
 authored_at: 2026-05-22
 scope: forward-steering for sub-task 4 (`onboarding`)
-binds: docs/design/design.v4.md §Flow 4, §Stateful surfaces (Today coordinator), §Data model (PROFILE, WITHDRAWAL_STATE)
+binds: docs/design/design.v5.md §Flow 4, §Stateful surfaces (Cessation/Today coordinator), §Data model (PROFILE, WITHDRAWAL_STATE)
 status_note: |
   This is a non-binding interface sketch surfaced for user approval. The
   onboarding driver MUST still follow Red→Green→Refactor: write the failing
   test, then the protocol stub, then the implementation. The shapes below
-  exist so the driver does not have to re-derive constraints from design.v3
+  exist so the driver does not have to re-derive constraints from design.v5
   during the test-first step.
 ---
 
@@ -23,7 +23,7 @@ Sub-task 4 (`onboarding`) is the first sub-task that has to write to persistence
 
 The architect recommends **shape 1**. It keeps each sub-task small (SRP, smallest-viable-change), lets the snapshot harness exercise Onb* views immediately, and gives the schema todo a clear acceptance criterion ("swap the in-memory `OnboardingRepository` for a `GRDBOnboardingRepository`; all existing Onb* tests stay green"). The repository protocol below is the contract that bridges the two sub-tasks.
 
-## Hard constraints inherited from design.v3
+## Hard constraints inherited from design.v5
 
 The onboarding driver MUST NOT relax any of these:
 
