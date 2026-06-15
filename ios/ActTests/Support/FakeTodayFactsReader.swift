@@ -11,12 +11,17 @@ final class FakeTodayFactsReader: TodayFactsReading {
     /// `facts.weighInLogged = true` after a write to drive re-resolve).
     var facts: TodayFacts
 
+    /// Set before a call to make `todayFacts(now:)` throw, simulating a degraded
+    /// read (e.g. to verify logWeighIn's fail-open is_morning fallback).
+    var thrownError: Error?
+
     init(facts: TodayFacts) {
         self.facts = facts
     }
 
     func todayFacts(now: Date) throws -> TodayFacts {
+        if let thrownError { throw thrownError }
         // Ignore `now`; the caller already controls the clock via `nowProvider`.
-        facts
+        return facts
     }
 }

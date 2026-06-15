@@ -291,6 +291,33 @@ final class TodayCoordinatorModelTests: XCTestCase {
             "now at wake+30:01 must produce isMorningWeighIn = false (boundary: > 30 min)")
     }
 
+    // MARK: - 7. logWeighIn degraded read — facts unavailable → is_morning false, write still lands
+
+    /// When the facts read throws inside logWeighIn, the wake anchor is unknown
+    /// so is_morning is recorded false ("unknown"), but the write must still
+    /// succeed (the weigh-in is not lost over a transient read failure).
+    func test_logWeighIn_whenFactsReadThrows_savesRowWithIsMorningFalse() throws {
+        let facts = TodayFacts(
+            now: fixedNow,
+            wakeTime: DateComponents(hour: 7, minute: 0),
+            mealWindowStart: DateComponents(hour: 12, minute: 0),
+            bedTime: DateComponents(hour: 22, minute: 0),
+            weighInLogged: false
+        )
+        let reader = FakeTodayFactsReader(facts: facts)
+        reader.thrownError = NSError(domain: "test.facts.read", code: 1)
+        let spy = WeightLogWritingSpy()
+        let model = TodayCoordinatorModel(
+            reader: reader, writer: spy, calendar: utcCalendar, nowProvider: { self.fixedNow }
+        )
+
+        try model.logWeighIn(lb: 200.0, source: .manualPad)
+
+        XCTAssertEqual(spy.savedRows.count, 1, "write must still land when the facts read fails")
+        XCTAssertEqual(spy.savedRows.first?.isMorningWeighIn, false,
+            "degraded read → is_morning recorded as false (unknown), not crashed or skipped")
+    }
+
     // MARK: - 8. Body-mass pre-fill — reader returns a value
 
     /// When `FakeBodyMassReader` returns a non-nil value, `prefilledWeightLb`

@@ -89,9 +89,16 @@ final class TodayCoordinatorModel {
         let facts = try? reader.todayFacts(now: now)
         let isMorningWeighIn: Bool
         if let wakeTime = facts?.wakeTime {
+            // Closed 30-min window. The lower bound (now >= anchor) is always
+            // true at the UI call site (the coordinator only surfaces .weighIn
+            // once now >= wake), so this is effectively "now <= wake + 30 min";
+            // it's kept explicit to stay correct for any non-UI caller.
             let anchor = wakeAnchor(for: now, wakeTime: wakeTime)
             isMorningWeighIn = now >= anchor && now <= anchor + 30 * 60
         } else {
+            // Degraded read (no profile / reader threw): we cannot know the wake
+            // anchor, so this is "unknown", recorded as false rather than a
+            // confirmed not-morning. Unreachable on the normal Today path.
             isMorningWeighIn = false
         }
         let row = WeightLogRow(
