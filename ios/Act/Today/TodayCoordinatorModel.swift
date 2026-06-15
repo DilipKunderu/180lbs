@@ -84,19 +84,38 @@ final class TodayCoordinatorModel {
     ///   - source: Provenance of the value — `.healthkit` when the value came
     ///     from a HealthKit body-mass sample, `.manualPad` when the user typed
     ///     it. Stored verbatim in the `source` column per design.v5 §Data model.
-    ///
-    /// - TODO (AUTHOR_CODE): map `source.rawValue` into the row and compute
-    ///   `isMorningWeighIn` from the 30-min wake window. The body is
-    ///   intentionally left hardcoded here so new provenance tests go RED.
     func logWeighIn(lb: Double, source: WeightLogSource) throws {
+        let now = nowProvider()
+        let facts = try? reader.todayFacts(now: now)
+        let isMorningWeighIn: Bool
+        if let wakeTime = facts?.wakeTime {
+            let anchor = wakeAnchor(for: now, wakeTime: wakeTime)
+            isMorningWeighIn = now >= anchor && now <= anchor + 30 * 60
+        } else {
+            isMorningWeighIn = false
+        }
         let row = WeightLogRow(
             id: UUID(),
-            loggedAt: nowProvider(),
+            loggedAt: now,
             weightLb: lb,
-            source: "manual_pad",   // TODO: replace with source.rawValue
-            isMorningWeighIn: false // TODO: compute (now - wakeAnchor) <= 30 min
+            source: source.rawValue,
+            // Note: .healthkit source flows through once CmdWeighIn passes .healthkit (ST5).
+            isMorningWeighIn: isMorningWeighIn
         )
         try writer.upsertWeightLog(row)
         refresh()
+    }
+
+    // MARK: - Private helpers
+
+    /// Reconstruct the wake anchor as a full `Date` in the model's calendar:
+    /// splice `wakeTime` hour/minute onto `now`'s y/m/d. Mirrors the identical
+    /// pattern in `TodayCoordinator.resolve` so both callers agree on the anchor.
+    private func wakeAnchor(for now: Date, wakeTime: DateComponents) -> Date {
+        var ymd = calendar.dateComponents([.year, .month, .day], from: now)
+        ymd.hour   = wakeTime.hour
+        ymd.minute = wakeTime.minute
+        ymd.second = 0
+        return calendar.date(from: ymd) ?? now
     }
 }
