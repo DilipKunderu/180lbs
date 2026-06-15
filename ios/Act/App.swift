@@ -18,10 +18,12 @@ struct ActApp: App {
         // automated onboarding walks; nil is the no-op path (no authorizer injected).
         let notificationAuthorizer: (any NotificationAuthorizationRequesting)? =
             CommandLine.arguments.contains("-ActSkipNotificationAuthorization") ? nil : NotificationService()
-        // Reuse the HealthKit skip flag so UI walks get a deterministic nil read
-        // (→ CmdWeightPad), the same path the onboarding UI test asserts.
-        let bodyMass: any BodyMassReading =
-            CommandLine.arguments.contains("-ActSkipHealthKitAuthorization") ? StubBodyMassReader() : HealthKitService()
+        // Body-mass reader resolution (DEBUG):
+        // 1. `-ActFakeBodyMassLb <value>` → FixedBodyMassReader (UI tests drive the
+        //    HealthKit pre-fill → "Weigh." hero deterministically).
+        // 2. else `-ActSkipHealthKitAuthorization` → StubBodyMassReader (nil → pad).
+        // 3. else the real HealthKitService.
+        let bodyMass: any BodyMassReading = Self.debugBodyMassReader()
         #else
         let healthAuthorizer: (any HealthAuthorizationRequesting)? = HealthKitService()
         let notificationAuthorizer: (any NotificationAuthorizationRequesting)? = NotificationService()
@@ -55,4 +57,22 @@ struct ActApp: App {
             RootView(model: rootModel)
         }
     }
+
+    #if DEBUG
+    /// Resolves the body-mass reader for DEBUG builds: a fixed value when UI
+    /// tests pass `-ActFakeBodyMassLb <value>` (drives the pre-fill hero), the
+    /// nil stub under `-ActSkipHealthKitAuthorization`, else the real service.
+    private static func debugBodyMassReader() -> any BodyMassReading {
+        let args = CommandLine.arguments
+        if let idx = args.firstIndex(of: "-ActFakeBodyMassLb"),
+           idx + 1 < args.count,
+           let lb = Double(args[idx + 1]) {
+            return FixedBodyMassReader(lb: lb)
+        }
+        if args.contains("-ActSkipHealthKitAuthorization") {
+            return StubBodyMassReader()
+        }
+        return HealthKitService()
+    }
+    #endif
 }
