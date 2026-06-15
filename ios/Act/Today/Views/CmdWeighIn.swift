@@ -23,8 +23,10 @@ struct CmdWeighIn: View {
     /// Pre-filled weight from HealthKit or cache. `nil` → manual-pad fallback.
     let prefilledWeightLb: Double?
 
-    /// Called when the user confirms the pre-filled value via the "Good." CTA.
-    var onGood: (Double) -> Void = { _ in }
+    /// Called when the user confirms a weigh-in. The `WeightLogSource` records
+    /// provenance: `.healthkit` from the pre-filled hero CTA, `.manualPad` from
+    /// the manual-entry pad.
+    var onGood: (Double, WeightLogSource) -> Void = { _, _ in }
 
     // MARK: - Manual-pad state (used only when prefilledWeightLb == nil)
 
@@ -47,7 +49,7 @@ struct CmdWeighIn: View {
         OnbShell(
             hero: "Weigh.",
             ctaTitle: "Good.",
-            onCTA: { onGood(weight) },
+            onCTA: { onGood(weight, .healthkit) },
             content: {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(formattedWeight(weight))
@@ -80,7 +82,7 @@ struct CmdWeighIn: View {
             },
             onCTA: {
                 if let value = Double(padDisplayString) {
-                    onGood(value)
+                    onGood(value, .manualPad)
                 }
             }
         )
@@ -109,9 +111,9 @@ struct CmdWeighIn: View {
 // MARK: - Preview
 
 #Preview("Pre-filled") {
-    CmdWeighIn(prefilledWeightLb: 308.4, onGood: { _ in })
+    CmdWeighIn(prefilledWeightLb: 308.4, onGood: { _, _ in })
 }
 
 #Preview("Manual pad") {
-    CmdWeighIn(prefilledWeightLb: nil, onGood: { _ in })
+    CmdWeighIn(prefilledWeightLb: nil, onGood: { _, _ in })
 }

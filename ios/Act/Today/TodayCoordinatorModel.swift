@@ -78,22 +78,51 @@ final class TodayCoordinatorModel {
     /// re-resolve state so the UI moves past `.weighIn`. A throwing writer
     /// surfaces the error to the caller and leaves `state` unchanged —
     /// `refresh()` is only called after a successful write.
-    func logWeighIn(lb: Double) throws {
-        // FOLLOW-UP (bundle with the real anchored HealthKit body-mass read):
-        // - `source` is correct as "manual_pad" today (the body-mass reader is a
-        //   nil stub so every write IS manual); set it to "healthkit" on the
-        //   prefill-confirm path once a real reader lands.
-        // - `isMorningWeighIn` should be `(now - wakeAnchor) <= 30 min` per
-        //   design.v5 §Data model, not a constant — compute it when a consumer
-        //   first reads the flag. No shipped feature reads it yet.
+    ///
+    /// - Parameters:
+    ///   - lb: Body-mass reading in pounds.
+    ///   - source: Provenance of the value — `.healthkit` when the value came
+    ///     from a HealthKit body-mass sample, `.manualPad` when the user typed
+    ///     it. Stored verbatim in the `source` column per design.v5 §Data model.
+    func logWeighIn(lb: Double, source: WeightLogSource) throws {
+        let now = nowProvider()
+        let facts = try? reader.todayFacts(now: now)
+        let isMorningWeighIn: Bool
+        if let wakeTime = facts?.wakeTime {
+            // Closed 30-min window. The lower bound (now >= anchor) is always
+            // true at the UI call site (the coordinator only surfaces .weighIn
+            // once now >= wake), so this is effectively "now <= wake + 30 min";
+            // it's kept explicit to stay correct for any non-UI caller.
+            let anchor = wakeAnchor(for: now, wakeTime: wakeTime)
+            isMorningWeighIn = now >= anchor && now <= anchor + 30 * 60
+        } else {
+            // Degraded read (no profile / reader threw): we cannot know the wake
+            // anchor, so this is "unknown", recorded as false rather than a
+            // confirmed not-morning. Unreachable on the normal Today path.
+            isMorningWeighIn = false
+        }
         let row = WeightLogRow(
             id: UUID(),
-            loggedAt: nowProvider(),
+            loggedAt: now,
             weightLb: lb,
-            source: "manual_pad",
-            isMorningWeighIn: false
+            source: source.rawValue,
+            // Note: .healthkit source flows through once CmdWeighIn passes .healthkit (ST5).
+            isMorningWeighIn: isMorningWeighIn
         )
         try writer.upsertWeightLog(row)
         refresh()
+    }
+
+    // MARK: - Private helpers
+
+    /// Reconstruct the wake anchor as a full `Date` in the model's calendar:
+    /// splice `wakeTime` hour/minute onto `now`'s y/m/d. Mirrors the identical
+    /// pattern in `TodayCoordinator.resolve` so both callers agree on the anchor.
+    private func wakeAnchor(for now: Date, wakeTime: DateComponents) -> Date {
+        var ymd = calendar.dateComponents([.year, .month, .day], from: now)
+        ymd.hour   = wakeTime.hour
+        ymd.minute = wakeTime.minute
+        ymd.second = 0
+        return calendar.date(from: ymd) ?? now
     }
 }

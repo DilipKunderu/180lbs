@@ -285,6 +285,39 @@ public actor HealthKitService {
         }
     }
 
+    /// Most-recent HealthKit body-mass reading in pounds, or `nil` on
+    /// denial / no-data / any error (fail-open per `design.v5 §Failure modes`).
+    ///
+    /// NOTE: the `HKSampleQuery` + `execute(...)` boundary below is intentionally
+    /// untested — `HKQuantitySample` has no public initializer and the test
+    /// `MockHealthStore.execute(_:)` is a counter-only stub that never fires a
+    /// query's results handler, so this wrapper cannot be exercised at the
+    /// `HealthStoreProtocol` seam. The selection + kg→lb logic IS covered by
+    /// `BodyMassTests` via the pure `latestBodyMassLb(from:)` converter; this
+    /// wrapper only maps `HKQuantitySample` → `(date, kg)` and delegates.
+    public func latestBodyMassLb() async -> Double? {
+        let bodyMassType = HKQuantityType(.bodyMass)
+        let samples: [HKQuantitySample]? = try? await withCheckedThrowingContinuation { continuation in
+            let query = HKSampleQuery(
+                sampleType: bodyMassType,
+                predicate: nil,
+                limit: 1,
+                sortDescriptors: [NSSortDescriptor(key: HKSampleSortIdentifierEndDate, ascending: false)]
+            ) { _, results, error in
+                if let error {
+                    continuation.resume(throwing: error)
+                    return
+                }
+                continuation.resume(returning: (results as? [HKQuantitySample]) ?? [])
+            }
+            healthStore.execute(query)
+        }
+        guard let samples else { return nil }
+        let tuples = samples.map { (date: $0.endDate, kg: $0.quantity.doubleValue(for: .gramUnit(with: .kilo))) }
+        // Module-qualified to disambiguate from this instance method of the same base name.
+        return Act.latestBodyMassLb(from: tuples)
+    }
+
     func _testFireHydrationObserverCallback() {
         handleObserverFired()
     }
@@ -327,3 +360,8 @@ public actor HealthKitService {
 // extension wires the service-layer actor into the onboarding-layer protocol
 // without naming `HealthKitService` anywhere in the onboarding layer.
 extension HealthKitService: HealthAuthorizationRequesting {}
+
+// MARK: - BodyMassReading seam
+// `latestBodyMassLb()` satisfies the protocol verbatim; this wires the service
+// actor into the Today-layer protocol without naming `HealthKitService` there.
+extension HealthKitService: BodyMassReading {}
