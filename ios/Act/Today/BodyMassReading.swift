@@ -1,5 +1,16 @@
 import Foundation
 
+/// The provenance of a WEIGHT_LOG row: how the weight value reached the app.
+///
+/// Stored as its `rawValue` string in the `source` column per design.v5
+/// §Data model (`source` = "healthkit | manual_pad").
+enum WeightLogSource: String {
+    /// The value originated from a HealthKit body-mass sample (pre-fill path).
+    case healthkit
+    /// The user typed the value on the manual weight pad.
+    case manualPad = "manual_pad"
+}
+
 /// Read seam for HealthKit body-mass pre-fill. Renderer-free; no HealthKit
 /// import at this layer so the protocol is testable without an entitlement.
 ///

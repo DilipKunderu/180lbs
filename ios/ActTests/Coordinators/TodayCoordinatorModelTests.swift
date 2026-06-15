@@ -93,7 +93,7 @@ final class TodayCoordinatorModelTests: XCTestCase {
         // before the model calls refresh() internally, so re-resolve sees it.
         reader.facts.weighInLogged = true
 
-        try model.logWeighIn(lb: 285.0)
+        try model.logWeighIn(lb: 285.0, source: .manualPad)
 
         // Spy must have received exactly one row.
         XCTAssertEqual(spy.savedRows.count, 1,
@@ -114,7 +114,7 @@ final class TodayCoordinatorModelTests: XCTestCase {
         let model = makeModel(reader: reader, writer: spy)
 
         reader.facts.weighInLogged = true // allow re-resolve to pass .weighIn
-        try model.logWeighIn(lb: 312.5)
+        try model.logWeighIn(lb: 312.5, source: .manualPad)
 
         let row = try XCTUnwrap(spy.savedRows.first,
             "expected one saved WeightLogRow")
@@ -140,7 +140,7 @@ final class TodayCoordinatorModelTests: XCTestCase {
         spy.thrownError = NSError(domain: "test.write", code: 42)
 
         // The error must propagate to the caller.
-        XCTAssertThrowsError(try model.logWeighIn(lb: 285.0),
+        XCTAssertThrowsError(try model.logWeighIn(lb: 285.0, source: .manualPad),
             "logWeighIn must rethrow the writer error")
 
         // No row must have been saved.
@@ -152,7 +152,146 @@ final class TodayCoordinatorModelTests: XCTestCase {
             "state must stay .weighIn when the write throws (no phantom re-resolve)")
     }
 
-    // MARK: - 5. Body-mass pre-fill — reader returns a value
+    // MARK: - 5. logWeighIn source provenance is stored verbatim
+
+    /// When the caller passes `.healthkit`, the saved row's `source` must be
+    /// "healthkit" — not the hardcoded "manual_pad" literal.
+    /// RED: the current body hardcodes "manual_pad" regardless of the argument.
+    func test_logWeighIn_healthkitSource_savesHealthkitSourceString() throws {
+        let reader = FakeTodayFactsReader(facts: makeFacts(weighInLogged: false))
+        let spy = WeightLogWritingSpy()
+        let model = makeModel(reader: reader, writer: spy)
+
+        reader.facts.weighInLogged = true
+        try model.logWeighIn(lb: 200.0, source: .healthkit)
+
+        let row = try XCTUnwrap(spy.savedRows.first, "expected one saved WeightLogRow")
+        XCTAssertEqual(row.source, "healthkit",
+            "source must be 'healthkit' when logWeighIn is called with .healthkit")
+    }
+
+    /// When the caller passes `.manualPad`, the saved row's `source` must be
+    /// "manual_pad". This discriminator also proves the source argument is
+    /// actually threaded through (not just coincidentally correct for one case).
+    func test_logWeighIn_manualPadSource_savesManualPadSourceString() throws {
+        let reader = FakeTodayFactsReader(facts: makeFacts(weighInLogged: false))
+        let spy = WeightLogWritingSpy()
+        let model = makeModel(reader: reader, writer: spy)
+
+        reader.facts.weighInLogged = true
+        try model.logWeighIn(lb: 200.0, source: .manualPad)
+
+        let row = try XCTUnwrap(spy.savedRows.first, "expected one saved WeightLogRow")
+        XCTAssertEqual(row.source, "manual_pad",
+            "source must be 'manual_pad' when logWeighIn is called with .manualPad")
+    }
+
+    // MARK: - 6. logWeighIn is_morning_weigh_in — 30-minute wake window
+
+    /// Build a model with a pinned `nowProvider` and a `FakeTodayFactsReader`
+    /// whose facts carry the given `wakeTime` components. Returns the spy so
+    /// the caller can inspect the saved row.
+    private func makeModelForMorningTest(
+        wakeHour: Int,
+        wakeMinute: Int,
+        now: Date
+    ) -> (model: TodayCoordinatorModel, spy: WeightLogWritingSpy) {
+        let wake = DateComponents(hour: wakeHour, minute: wakeMinute)
+        let facts = TodayFacts(
+            now: now,
+            wakeTime: wake,
+            mealWindowStart: DateComponents(hour: 12, minute: 0),
+            bedTime: DateComponents(hour: 22, minute: 0),
+            weighInLogged: false
+        )
+        let reader = FakeTodayFactsReader(facts: facts)
+        let spy = WeightLogWritingSpy()
+        let model = TodayCoordinatorModel(
+            reader: reader,
+            writer: spy,
+            calendar: utcCalendar,
+            nowProvider: { now }
+        )
+        reader.facts.weighInLogged = true // allow re-resolve after write
+        return (model, spy)
+    }
+
+    /// Helper: construct the expected wake anchor for a given `now` in the UTC
+    /// calendar, splicing `wakeHour`/`wakeMinute` onto `now`'s y/m/d — mirrors
+    /// exactly what `TodayCoordinator.resolve` and `logWeighIn` must do.
+    private func wakeAnchorDate(for now: Date, hour: Int, minute: Int) -> Date {
+        var ymd = utcCalendar.dateComponents([.year, .month, .day], from: now)
+        ymd.hour = hour
+        ymd.minute = minute
+        ymd.second = 0
+        return utcCalendar.date(from: ymd)!
+    }
+
+    /// now is 10 min after wake → `isMorningWeighIn` must be `true`
+    /// (well within the 30-min window).
+    /// RED: the current body hardcodes `false`.
+    func test_logWeighIn_nowTenMinAfterWake_isMorningWeighInTrue() throws {
+        // wake = 07:00 UTC on 2026-06-16; now = 07:10 UTC (10 min post-wake)
+        let wakeH = 7, wakeM = 0
+        let now = wakeAnchorDate(for: fixedNow, hour: wakeH, minute: wakeM)
+            .addingTimeInterval(10 * 60) // +10 min
+        let (model, spy) = makeModelForMorningTest(wakeHour: wakeH, wakeMinute: wakeM, now: now)
+
+        try model.logWeighIn(lb: 200.0, source: .manualPad)
+
+        let row = try XCTUnwrap(spy.savedRows.first)
+        XCTAssertTrue(row.isMorningWeighIn,
+            "now 10 min after wake must produce isMorningWeighIn = true (within 30-min window)")
+    }
+
+    /// now is 90 min after wake → `isMorningWeighIn` must be `false`
+    /// (outside the 30-min window).
+    func test_logWeighIn_nowNinetyMinAfterWake_isMorningWeighInFalse() throws {
+        // wake = 07:00 UTC on 2026-06-16; now = 08:30 UTC (90 min post-wake)
+        let wakeH = 7, wakeM = 0
+        let now = wakeAnchorDate(for: fixedNow, hour: wakeH, minute: wakeM)
+            .addingTimeInterval(90 * 60) // +90 min
+        let (model, spy) = makeModelForMorningTest(wakeHour: wakeH, wakeMinute: wakeM, now: now)
+
+        try model.logWeighIn(lb: 200.0, source: .manualPad)
+
+        let row = try XCTUnwrap(spy.savedRows.first)
+        XCTAssertFalse(row.isMorningWeighIn,
+            "now 90 min after wake must produce isMorningWeighIn = false (outside 30-min window)")
+    }
+
+    /// Boundary: now at exactly wake+29:59 → `isMorningWeighIn` must be `true`
+    /// (still within the closed 30-min window).
+    /// RED: body hardcodes `false`.
+    func test_logWeighIn_nowAt29min59secAfterWake_isMorningWeighInTrue() throws {
+        let wakeH = 6, wakeM = 30
+        let now = wakeAnchorDate(for: fixedNow, hour: wakeH, minute: wakeM)
+            .addingTimeInterval(29 * 60 + 59) // +29 min 59 sec
+        let (model, spy) = makeModelForMorningTest(wakeHour: wakeH, wakeMinute: wakeM, now: now)
+
+        try model.logWeighIn(lb: 200.0, source: .manualPad)
+
+        let row = try XCTUnwrap(spy.savedRows.first)
+        XCTAssertTrue(row.isMorningWeighIn,
+            "now at wake+29:59 must still be isMorningWeighIn = true (boundary: <= 30 min)")
+    }
+
+    /// Boundary: now at exactly wake+30:01 → `isMorningWeighIn` must be `false`
+    /// (just beyond the closed 30-min window).
+    func test_logWeighIn_nowAt30min01secAfterWake_isMorningWeighInFalse() throws {
+        let wakeH = 6, wakeM = 30
+        let now = wakeAnchorDate(for: fixedNow, hour: wakeH, minute: wakeM)
+            .addingTimeInterval(30 * 60 + 1) // +30 min 1 sec
+        let (model, spy) = makeModelForMorningTest(wakeHour: wakeH, wakeMinute: wakeM, now: now)
+
+        try model.logWeighIn(lb: 200.0, source: .manualPad)
+
+        let row = try XCTUnwrap(spy.savedRows.first)
+        XCTAssertFalse(row.isMorningWeighIn,
+            "now at wake+30:01 must produce isMorningWeighIn = false (boundary: > 30 min)")
+    }
+
+    // MARK: - 8. Body-mass pre-fill — reader returns a value
 
     /// When `FakeBodyMassReader` returns a non-nil value, `prefilledWeightLb`
     /// is set to that value after draining `bodyMassTask`.
@@ -177,7 +316,7 @@ final class TodayCoordinatorModelTests: XCTestCase {
             "prefilledWeightLb must equal the value returned by the body-mass reader")
     }
 
-    // MARK: - 6. Body-mass fallback — reader returns nil
+    // MARK: - 9. Body-mass fallback — reader returns nil
 
     /// When `FakeBodyMassReader` returns `nil` (denied / no data), `prefilledWeightLb`
     /// remains `nil` — the UI should show the manual pad.

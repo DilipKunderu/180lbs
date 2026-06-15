@@ -20,7 +20,7 @@ struct TodayCoordinatorView: View {
             case .weighIn:
                 CmdWeighIn(
                     prefilledWeightLb: model.prefilledWeightLb,
-                    onGood: { lb in try? model.logWeighIn(lb: lb) }
+                    onGood: { lb in try? model.logWeighIn(lb: lb, source: .manualPad) }
                 )
             default:
                 notYetBuiltPlaceholder
