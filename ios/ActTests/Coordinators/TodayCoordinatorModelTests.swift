@@ -224,7 +224,7 @@ final class TodayCoordinatorModelTests: XCTestCase {
         ymd.hour = hour
         ymd.minute = minute
         ymd.second = 0
-        return utcCalendar.date(from: ymd)!
+        return utcCalendar.date(from: ymd) ?? now
     }
 
     /// now is 10 min after wake → `isMorningWeighIn` must be `true`
