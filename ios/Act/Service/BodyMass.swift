@@ -15,7 +15,6 @@ let kgToLbFactor: Double = 2.2046226218
 /// - Returns: The lb value of the sample with the latest `date`, or `nil` when
 ///   `samples` is empty.
 func latestBodyMassLb(from samples: [(date: Date, kg: Double)]) -> Double? {
-    // RED stub: always returns nil so tests fail until the real implementation
-    // is added in the AUTHOR_CODE pass.
-    return nil
+    guard let latest = samples.max(by: { $0.date < $1.date }) else { return nil }
+    return latest.kg * kgToLbFactor
 }
