@@ -1,10 +1,10 @@
 import XCTest
 
-/// On-simulator integration walk of the full onboarding flow: launches the
-/// real app from a fresh-install state (`-ActResetLocalStore`), taps every
-/// sticky CTA through all 9 steps, and asserts the bootstrap handoff lands
-/// on Today. Attaches a screenshot per step (`.keepAlways`) — these are the
-/// PR evidence images; export them from the xcresult with
+/// On-simulator integration walks of the full onboarding flow into the Today
+/// surface. Each launches the real app from a fresh-install state
+/// (`-ActResetLocalStore`), taps every sticky CTA through all 9 steps, and
+/// asserts the landing. Screenshots are attached per step (`.keepAlways`) — the
+/// PR evidence images; export from the xcresult with
 /// `scripts/export-ui-test-screenshots.sh`.
 final class OnboardingFlowUITests: XCTestCase {
 
@@ -20,7 +20,11 @@ final class OnboardingFlowUITests: XCTestCase {
         ("Shop.", "Send to Reminders")
     ]
 
-    func test_freshInstall_walksAllNineSteps_andLandsOnToday() {
+    /// Default landing: production body-mass reader returns nil (StubBodyMassReader
+    /// under `-ActSkipHealthKitAuthorization`), so Today's CmdWeighIn shows the
+    /// CmdWeightPad manual fallback. Asserts onboarding exited; the "Good." CTA
+    /// check is wall-clock-soft (pre-05:00 resolves to .preWake placeholder).
+    func test_freshInstall_walksAllNineSteps_andLandsOnManualPad() {
         let app = XCUIApplication()
         app.launchArguments = [
             "-ActResetLocalStore",
@@ -29,6 +33,61 @@ final class OnboardingFlowUITests: XCTestCase {
         ]
         app.launch()
 
+        walkOnboarding(app)
+
+        XCTAssertFalse(app.staticTexts["Shop."].exists, "flow should have left the final onboarding step")
+
+        // Daytime (.weighIn) → CmdWeightPad shows the "Good." CTA. Pre-05:00 the
+        // coordinator resolves to .preWake (placeholder); the hard assertion above
+        // already proved onboarding exited, so the CTA check is soft.
+        let goodCTA = app.buttons["Good."]
+        if goodCTA.waitForExistence(timeout: 10) {
+            XCTAssertTrue(goodCTA.exists, "expected 'Good.' CTA on the Today weigh-in pad")
+        } else {
+            XCTContext.runActivity(named: "Today CTA not visible — likely pre-wake wall-clock state") { _ in }
+        }
+
+        attachScreenshot(of: app, named: "10-Today-manualPad")
+    }
+
+    /// HealthKit pre-fill path: `-ActFakeBodyMassLb 308.4` injects a fixed
+    /// body-mass reading, so after onboarding Today's CmdWeighIn renders the
+    /// "Weigh." hero pre-filled with 308.4 (the design.v5 §Behavior pre-fill).
+    /// This is the integration coverage for the body-mass-read milestone — the
+    /// default walk above only exercises the nil→pad path.
+    func test_freshInstall_withHealthKitBodyMass_landsOnWeighInHero() {
+        let app = XCUIApplication()
+        app.launchArguments = [
+            "-ActResetLocalStore",
+            "-ActSkipHealthKitAuthorization",
+            "-ActSkipNotificationAuthorization",
+            "-ActFakeBodyMassLb", "308.4"
+        ]
+        app.launch()
+
+        walkOnboarding(app)
+
+        XCTAssertFalse(app.staticTexts["Shop."].exists, "flow should have left onboarding")
+
+        // "308.4" is unique to the Today CmdWeighIn pre-fill hero (the onboarding
+        // "Weigh." scale step shows no value), so it unambiguously proves the
+        // HealthKit-prefill hero rendered end-to-end. Wall-clock-soft for pre-05:00.
+        let prefilledValue = app.staticTexts["308.4"]
+        if prefilledValue.waitForExistence(timeout: 10) {
+            XCTAssertTrue(app.staticTexts["Weigh."].exists, "expected the 'Weigh.' hero on the pre-fill path")
+            XCTAssertTrue(prefilledValue.exists, "expected 308.4 pre-filled from the injected body-mass reading")
+        } else {
+            XCTContext.runActivity(named: "Pre-fill hero not visible — likely pre-wake wall-clock state") { _ in }
+        }
+
+        attachScreenshot(of: app, named: "10-Today-weighInHero")
+    }
+
+    // MARK: - Helpers
+
+    /// Taps through all 9 onboarding steps, asserting each hero and attaching a
+    /// per-step screenshot. Leaves the app on the Today surface.
+    private func walkOnboarding(_ app: XCUIApplication) {
         for (index, step) in steps.enumerated() {
             let hero = app.staticTexts[step.hero]
             XCTAssertTrue(
@@ -42,36 +101,6 @@ final class OnboardingFlowUITests: XCTestCase {
             attachScreenshot(of: app, named: String(format: "%02d-%@", index + 1, step.hero))
             app.buttons[step.cta].tap()
         }
-
-        // --- Today landing assertion ---
-        //
-        // Hard requirement: onboarding must have exited (the "Shop." hero is gone).
-        XCTAssertFalse(app.staticTexts["Shop."].exists, "flow should have left the final onboarding step")
-
-        // Soft requirement: the "Good." CTA should be visible on the Today surface.
-        //
-        // The production body-mass reader is `StubBodyMassReader` (returns nil), so
-        // `CmdWeighIn` always shows the `CmdWeightPad` manual-pad fallback whose sticky
-        // CTA is "Good.". This path is reached only when the coordinator resolves to
-        // `.weighIn` — i.e. wall-clock >= wake_time (05:00 by default).
-        //
-        // Wall-clock dependency: if the test runs before 05:00 local time the
-        // coordinator resolves to `.preWake` and shows the "—" placeholder instead.
-        // In that edge case this assertion will fail but the hard requirement above
-        // still passes. CI runs in daytime so this is expected to be stable in
-        // practice; a fixed-clock injection seam would remove the dependency entirely
-        // (deferred — no launch-argument clock override exists today).
-        let goodCTA = app.buttons["Good."]
-        if goodCTA.waitForExistence(timeout: 10) {
-            // Daytime path: Today surface is showing the weigh-in pad.
-            XCTAssertTrue(goodCTA.exists, "expected 'Good.' CTA on the Today weigh-in surface")
-        } else {
-            // Pre-05:00 path or any other state: log a note but do not hard-fail.
-            // The hard assertion above already verified onboarding exited.
-            XCTContext.runActivity(named: "Today CTA not visible — likely pre-wake wall-clock state") { _ in }
-        }
-
-        attachScreenshot(of: app, named: "10-Today")
     }
 
     private func attachScreenshot(of app: XCUIApplication, named name: String) {
