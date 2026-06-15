@@ -18,9 +18,14 @@ struct ActApp: App {
         // automated onboarding walks; nil is the no-op path (no authorizer injected).
         let notificationAuthorizer: (any NotificationAuthorizationRequesting)? =
             CommandLine.arguments.contains("-ActSkipNotificationAuthorization") ? nil : NotificationService()
+        // Reuse the HealthKit skip flag so UI walks get a deterministic nil read
+        // (→ CmdWeightPad), the same path the onboarding UI test asserts.
+        let bodyMass: any BodyMassReading =
+            CommandLine.arguments.contains("-ActSkipHealthKitAuthorization") ? StubBodyMassReader() : HealthKitService()
         #else
         let healthAuthorizer: (any HealthAuthorizationRequesting)? = HealthKitService()
         let notificationAuthorizer: (any NotificationAuthorizationRequesting)? = NotificationService()
+        let bodyMass: any BodyMassReading = HealthKitService()
         #endif
 
         // Build one LocalStore instance and pass it as both the onboarding store
@@ -36,7 +41,7 @@ struct ActApp: App {
             notificationAuthorizer: notificationAuthorizer,
             todayReader: localStore,
             todayWriter: localStore,
-            bodyMass: StubBodyMassReader(),
+            bodyMass: bodyMass,
             calendar: localStore?.calendar ?? {
                 var c = Calendar(identifier: .gregorian)
                 c.timeZone = .current
